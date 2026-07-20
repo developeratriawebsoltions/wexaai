@@ -1,9 +1,11 @@
 import OpenAI from "openai";
 import { prisma } from "./prisma";
 
+// Prefer GROQ (Grok) if available, otherwise fall back to OpenAI
+const useGroq = Boolean(process.env.GROQ_API_KEY);
 const openai = new OpenAI({
-  apiKey: process.env.GROQ_API_KEY,
-  baseURL: "https://api.groq.com/openai/v1",
+  apiKey: useGroq ? process.env.GROQ_API_KEY : process.env.OPENAI_API_KEY,
+  baseURL: useGroq ? "https://api.groq.com/openai/v1" : undefined,
 });
 
 export async function handleAiReply(
@@ -25,20 +27,61 @@ export async function handleAiReply(
     const knowledgeText = knowledge.map((k) => `${k.title}: ${k.content}`).join("\n");
     const systemPrompt = `${agent.systemPrompt}\n\nKnowledge Base:\n${knowledgeText}`;
 
-    console.log("[AI Reply] calling OpenAI with model:", agent.model);
-    const completion = await openai.chat.completions.create({
-      model: agent.model,
-      temperature: agent.temperature,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: customerMessage },
-      ],
-    });
+    console.log("[AI Reply] provider:", useGroq ? "grok (groq)" : "openai", "requested model:", agent.model);
 
-    const aiText = completion.choices[0]?.message?.content ?? "";
-    console.log("[AI Reply] got response:", aiText?.slice(0, 80));
+    // Map incompatible model names to a grok-compatible model when using Groq
+    let modelToUse = agent.model ?? (useGroq ? "grok-1" : "gpt-4o-mini");
+    if (useGroq) {
+      // If UI stored an OpenAI/other model name, default to grok-1 for Groq provider
+      if (/gpt|llama|mixtral|gemma|gpt-4/i.test(String(modelToUse))) {
+        modelToUse = "grok-1";
+      }
+    }
+
+    console.log("[AI Reply] calling model:", modelToUse);
+
+    let completion: any;
+    if (useGroq) {
+      // Call Groq REST endpoint directly to ensure Grok is used
+      const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: modelToUse,
+          temperature: agent.temperature,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: customerMessage },
+          ],
+        }),
+      });
+
+      try {
+        completion = await groqRes.json();
+      } catch (e) {
+        console.error("[AI Reply] failed to parse Groq response", e);
+        completion = {};
+      }
+      if (!groqRes.ok) console.error("[AI Reply] Groq API error", groqRes.status, completion);
+    } else {
+      completion = await openai.chat.completions.create({
+        model: modelToUse,
+        temperature: agent.temperature,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: customerMessage },
+        ],
+      });
+    }
+
+    const aiText = completion?.choices?.[0]?.message?.content ?? "";
+    console.log("[AI Reply] got response (truncated):", aiText ? aiText.slice(0, 80) : "<empty>");
 
     if (!aiText) {
+      console.error("[AI Reply] completion object:", JSON.stringify(completion));
       await prisma.conversation.update({
         where: { id: conversationId },
         data: { status: "needs_attention" },
