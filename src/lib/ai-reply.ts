@@ -19,13 +19,6 @@ export async function handleAiReply(
     console.log("[AI Reply] agent found:", !!agent, "autoReply:", agent?.autoReply);
     if (!agent || !agent.autoReply) return;
 
-    const triggerWords = ["hi", "hello", "hii", "helo", "hey"];
-    const msgLower = customerMessage.trim().toLowerCase();
-    const isTriggered = triggerWords.some((w) => new RegExp(`(^|\\s)${w}(\\s|$)`).test(msgLower));
-    if (!isTriggered) {
-      console.log("[AI Reply] No trigger word found, skipping.");
-      return;
-    }
 
     const knowledge = await prisma.knowledgeBase.findMany({
       where: { workspaceId },
