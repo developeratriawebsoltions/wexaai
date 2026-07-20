@@ -18,30 +18,30 @@ model User {
 }
 
 model Workspace {
-  id                   String              @id @default(cuid())
+  id                   String                @id @default(cuid())
   name                 String
-  slug                 String              @unique
-  plan                 String              @default("free")
-  status               String              @default("active")
+  slug                 String                @unique
+  plan                 String                @default("free")
+  status               String                @default("active")
   ownerId              String
-  createdAt            DateTime            @default(now())
-  owner                User                @relation(fields: [ownerId], references: [id])
-  members              WorkspaceMember[]
-  whatsappAccount      WhatsAppAccount?
-  messages             Message[]
-  conversations        Conversation[]
-  templates            Template[]
-  contacts             Contact[]
+  createdAt            DateTime              @default(now())
+  activityLogs         ActivityLog[]
   aiAgent              AiAgent?
-  knowledgeBase        KnowledgeBase[]
+  apiKeys              ApiKey[]
   broadcasts           Broadcast[]
+  contacts             Contact[]
+  conversations        Conversation[]
   flows                Flow[]
-  settings             WorkspaceSettings?
+  knowledgeBase        KnowledgeBase[]
+  messages             Message[]
   notificationSettings NotificationSettings?
   securitySettings     SecuritySettings?
-  apiKeys              ApiKey[]
+  templates            Template[]
   webhooks             WebhookSettings?
-  activityLogs         ActivityLog[]
+  whatsappAccount      WhatsAppAccount?
+  owner                User                  @relation(fields: [ownerId], references: [id])
+  members              WorkspaceMember[]
+  settings             WorkspaceSettings?
 }
 
 model WorkspaceMember {
@@ -50,8 +50,8 @@ model WorkspaceMember {
   userId      String
   role        String    @default("agent")
   createdAt   DateTime  @default(now())
-  workspace   Workspace @relation(fields: [workspaceId], references: [id])
   user        User      @relation(fields: [userId], references: [id])
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
 
   @@unique([workspaceId, userId])
 }
@@ -87,17 +87,17 @@ model Contact {
 model Conversation {
   id            String    @id @default(cuid())
   workspaceId   String
-  contactId     String
   contactPhone  String
   contactName   String?
   lastMessage   String    @default("")
   lastMessageAt DateTime  @default(now())
   unreadCount   Int       @default(0)
   status        String    @default("open")
-  assignedTo    String?
   createdAt     DateTime  @default(now())
-  workspace     Workspace @relation(fields: [workspaceId], references: [id])
+  assignedTo    String?
+  contactId     String
   contact       Contact   @relation(fields: [contactId], references: [id])
+  workspace     Workspace @relation(fields: [workspaceId], references: [id])
   messages      Message[]
 
   @@unique([workspaceId, contactPhone])
@@ -106,18 +106,18 @@ model Conversation {
 model Message {
   id             String       @id @default(cuid())
   workspaceId    String
-  conversationId String
-  contactId      String?
   from           String
   text           String
   waMessageId    String?
-  direction      String       @default("inbound")
-  messageType    String       @default("text")
   status         String       @default("received")
   createdAt      DateTime     @default(now())
-  workspace      Workspace    @relation(fields: [workspaceId], references: [id])
-  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  conversationId String
+  direction      String       @default("inbound")
+  contactId      String?
+  messageType    String       @default("text")
   contact        Contact?     @relation(fields: [contactId], references: [id])
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  workspace      Workspace    @relation(fields: [workspaceId], references: [id])
 }
 
 model AiAgent {
@@ -162,25 +162,25 @@ model Broadcast {
 }
 
 model Flow {
-  id          String      @id @default(cuid())
+  id          String     @id @default(cuid())
   workspaceId String
   name        String
-  status      String      @default("draft")
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  workspace   Workspace   @relation(fields: [workspaceId], references: [id])
-  nodes       FlowNode[]
+  status      String     @default("draft")
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id])
   edges       FlowEdge[]
+  nodes       FlowNode[]
 }
 
 model FlowNode {
-  id        String   @id @default(cuid())
+  id        String @id @default(cuid())
   flowId    String
   type      String
-  positionX Float    @default(0)
-  positionY Float    @default(0)
-  config    Json     @default("{}")
-  flow      Flow     @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  positionX Float  @default(0)
+  positionY Float  @default(0)
+  config    Json   @default("{}")
+  flow      Flow   @relation(fields: [flowId], references: [id], onDelete: Cascade)
 }
 
 model FlowEdge {
@@ -192,14 +192,14 @@ model FlowEdge {
 }
 
 model Plan {
-  id             String         @id @default(cuid())
-  name           String         @unique
-  price          Int
-  contactsLimit  Int
-  messagesLimit  Int
-  aiLimit        Int
-  teamLimit      Int
-  subscriptions  Subscription[]
+  id            String         @id @default(cuid())
+  name          String         @unique
+  price         Int
+  contactsLimit Int
+  messagesLimit Int
+  aiLimit       Int
+  teamLimit     Int
+  subscriptions Subscription[]
 }
 
 model Subscription {
@@ -212,9 +212,9 @@ model Subscription {
   nextBillingDate       DateTime?
   paymentGateway        String    @default("razorpay")
   gatewaySubscriptionId String?
-  plan                  Plan      @relation(fields: [planId], references: [id])
-  payments              Payment[]
   invoices              Invoice[]
+  payments              Payment[]
+  plan                  Plan      @relation(fields: [planId], references: [id])
 }
 
 model Invoice {
@@ -241,12 +241,12 @@ model Payment {
 }
 
 model UsageLog {
-  id            String   @id @default(cuid())
-  workspaceId   String
-  contactsUsed  Int      @default(0)
-  messagesUsed  Int      @default(0)
-  aiUsed        Int      @default(0)
-  createdAt     DateTime @default(now())
+  id           String   @id @default(cuid())
+  workspaceId  String
+  contactsUsed Int      @default(0)
+  messagesUsed Int      @default(0)
+  aiUsed       Int      @default(0)
+  createdAt    DateTime @default(now())
 }
 
 model BroadcastLog {
@@ -281,7 +281,6 @@ model Template {
   @@unique([workspaceId, name, language])
 }
 
-// Settings Tables
 model WorkspaceSettings {
   id          String    @id @default(cuid())
   workspaceId String    @unique
@@ -309,12 +308,12 @@ model NotificationSettings {
 }
 
 model SecuritySettings {
-  id          String    @id @default(cuid())
-  workspaceId String    @unique
-  twoFactorEnabled Boolean @default(false)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id               String    @id @default(cuid())
+  workspaceId      String    @unique
+  twoFactorEnabled Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 }
 
 model ApiKey {

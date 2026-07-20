@@ -19,6 +19,14 @@ export async function handleAiReply(
     console.log("[AI Reply] agent found:", !!agent, "autoReply:", agent?.autoReply);
     if (!agent || !agent.autoReply) return;
 
+    const triggerWords = ["hi", "hello", "hii", "helo", "hey"];
+    const msgLower = customerMessage.trim().toLowerCase();
+    const isTriggered = triggerWords.some((w) => new RegExp(`(^|\\s)${w}(\\s|$)`).test(msgLower));
+    if (!isTriggered) {
+      console.log("[AI Reply] No trigger word found, skipping.");
+      return;
+    }
+
     const knowledge = await prisma.knowledgeBase.findMany({
       where: { workspaceId },
       select: { title: true, content: true },
@@ -30,11 +38,11 @@ export async function handleAiReply(
     console.log("[AI Reply] provider:", useGroq ? "grok (groq)" : "openai", "requested model:", agent.model);
 
     // Map incompatible model names to a grok-compatible model when using Groq
-    let modelToUse = agent.model ?? (useGroq ? "grok-1" : "gpt-4o-mini");
+    let modelToUse = agent.model ?? (useGroq ? "llama-3.3-70b-versatile" : "gpt-4o-mini");
     if (useGroq) {
-      // If UI stored an OpenAI/other model name, default to grok-1 for Groq provider
-      if (/gpt|llama|mixtral|gemma|gpt-4/i.test(String(modelToUse))) {
-        modelToUse = "grok-1";
+      // Map invalid/OpenAI model names to a valid Groq model
+      if (/gpt/i.test(String(modelToUse))) {
+        modelToUse = "llama-3.3-70b-versatile";
       }
     }
 
