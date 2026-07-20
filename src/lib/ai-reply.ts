@@ -25,8 +25,9 @@ export async function handleAiReply(
       select: { title: true, content: true },
     });
 
-    const knowledgeText = knowledge.map((k) => `${k.title}: ${k.content}`).join("\n");
-    const systemPrompt = `${agent.systemPrompt}\n\nKnowledge Base:\n${knowledgeText}`;
+    const knowledgeText = knowledge.map((k: { title: string; content: string }) => `${k.title}: ${k.content}`).join("\n");
+    const basePrompt = agent.systemPrompt ?? "You are a helpful customer support assistant.";
+    const systemPrompt = knowledgeText ? `${basePrompt}\n\nKnowledge Base:\n${knowledgeText}` : basePrompt;
 
     console.log("[AI Reply] provider:", useGroq ? "grok (groq)" : "openai", "requested model:", agent.model);
 
