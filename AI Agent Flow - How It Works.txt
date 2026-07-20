@@ -1,0 +1,164 @@
+================================================================
+AI AGENT - AUTO REPLY ENGINE (HOW IT WORKS)
+================================================================
+
+POORA FLOW - STEP BY STEP
+--------------------------
+
+Customer WhatsApp pe message bhejta hai
+            ↓
+Meta Cloud API → Webhook hit karta hai
+/api/webhook/meta (POST)
+            ↓
+Step 1: Contact find karo ya banao (DB)
+            ↓
+Step 2: Conversation find karo ya banao (DB)
+            ↓
+Step 3: Message save karo DB mein (inbound)
+            ↓
+Step 4: handleAiReply() fire hoti hai
+(non-blocking — webhook turant "ok" return karta hai)
+            ↓
+            ↓ (background mein chalta hai)
+            ↓
+AiAgent DB se load hota hai
+→ autoReply = false? → STOP, kuch nahi hoga
+→ autoReply = true? → AAGE BADHO
+            ↓
+Knowledge Base DB se load hoti hai
+(saari entries ek string mein join hoti hain)
+            ↓
+System Prompt banta hai:
+"You are customer support..." + Knowledge Base data
+            ↓
+OpenAI API call hoti hai:
+  system: systemPrompt + knowledge
+  user: customer ka message
+            ↓
+AI response aata hai
+→ Empty response? → conversation "needs_attention" ho jaata hai
+                    (Human agent ko assign)
+→ Response aaya? → AAGE BADHO
+            ↓
+AI reply DB mein save hoti hai (outbound, from: "AI")
+            ↓
+Meta Cloud API call hoti hai
+→ Customer ke phone pe WhatsApp message jaata hai
+
+
+================================================================
+REAL EXAMPLE
+================================================================
+
+Customer likhta hai: "iPhone 16 ka price kya hai?"
+
+Knowledge Base mein hai:
+  iPhone 16: Available at ₹79,999
+
+OpenAI ko yeh jaata hai:
+  SYSTEM: You are customer support assistant.
+          Knowledge Base:
+          iPhone 16: Available at ₹79,999
+
+  USER: iPhone 16 ka price kya hai?
+
+OpenAI reply karta hai:
+  "Yes! iPhone 16 ₹79,999 mein available hai.
+   Kya aap order karna chahenge?"
+
+Customer ko WhatsApp pe yahi message milta hai.
+
+
+================================================================
+KEY POINTS
+================================================================
+
+1. autoReply = false  → AI kuch nahi karta, sirf message save hota hai
+2. autoReply = true   → AI automatically reply karta hai
+3. Toggle karna hai   → Dashboard > AI Agent > Settings tab
+4. Knowledge Base     → Jitna zyada bharo, AI utna better jawab dega
+5. Empty AI response  → Conversation "needs_attention" ho jaata hai
+                         (Human agent ko alert milta hai)
+6. Webhook fast       → Turant "ok" return karta hai,
+                         AI reply background mein hoti hai
+                         (Meta timeout nahi hota)
+
+
+================================================================
+FILES STRUCTURE
+================================================================
+
+src/
+├── lib/
+│   └── ai-reply.ts              ← Main AI reply engine
+├── app/
+│   └── api/
+│       ├── webhook/meta/route.ts ← Webhook (Step 1-4)
+│       ├── ai-agent/route.ts     ← GET/PATCH agent settings
+│       ├── knowledge/
+│       │   ├── route.ts          ← GET/POST knowledge
+│       │   └── [id]/route.ts     ← DELETE knowledge
+│       └── overview/route.ts     ← Dashboard stats
+└── dashboard/
+    └── ai-agent/page.tsx         ← AI Agent UI
+
+
+================================================================
+DATABASE MODELS
+================================================================
+
+AiAgent
+-------
+- workspaceId   (unique)
+- name          (Agent ka naam)
+- systemPrompt  (AI ko instructions)
+- model         (gpt-4o-mini / gpt-4o / gpt-4-turbo)
+- temperature   (0.0 - 1.0, creativity level)
+- language      (English / Hindi / Hinglish / Arabic)
+- autoReply     (true/false — main toggle)
+- fallbackType  (assign_human / ignore)
+
+KnowledgeBase
+-------------
+- workspaceId
+- title         (e.g. "Shipping Policy")
+- content       (e.g. "Delivery takes 3 days")
+- type          (FAQ / Policy / Product / Other)
+
+
+================================================================
+HUMAN HANDOFF
+================================================================
+
+Kab hota hai:
+- AI ka response empty aata hai
+- OpenAI API error aata hai
+
+Kya hota hai:
+- Conversation ka status "needs_attention" ho jaata hai
+- Dashboard Overview mein "Needs Attention" count badhta hai
+- Human agent inbox mein dekh sakta hai
+
+
+================================================================
+SETUP CHECKLIST
+================================================================
+
+[ ] .env mein OPENAI_API_KEY add karo
+    OPENAI_API_KEY="sk-..."
+
+[ ] Dashboard > AI Agent > Settings mein jaao
+    - Agent Name set karo
+    - System Prompt likho
+    - Model choose karo
+    - Auto Reply toggle ON karo
+    - Save karo
+
+[ ] Dashboard > AI Agent > Knowledge Base mein jaao
+    - Apne business ka data add karo
+    - FAQ, Policies, Products sab add karo
+
+[ ] WhatsApp Integration connected honi chahiye
+    (Dashboard > Integrations)
+
+================================================================

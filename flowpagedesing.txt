@@ -1,0 +1,318 @@
+Yes. We can build it exactly like a real SaaS product (WATI/n8n/ManyChat style), not just a demo.
+
+🚀 Production Flow Builder Stack
+Next.js 16
+TypeScript
+TailwindCSS
+React Flow
+Shadcn UI
+Zustand
+React Hook Form
+Zod
+Lucide Icons
+Folder Structure
+src/
+
+app/
+└── dashboard/
+    └── flows/
+        ├── page.tsx
+        └── loading.tsx
+
+components/
+
+flows/
+
+├── FlowCanvas.tsx
+├── FlowSidebar.tsx
+├── FlowTopbar.tsx
+├── PropertiesPanel.tsx
+
+├── nodes/
+│      TriggerNode.tsx
+│      MessageNode.tsx
+│      ConditionNode.tsx
+│      AiReplyNode.tsx
+│      WaitNode.tsx
+│      TemplateNode.tsx
+│      AssignNode.tsx
+│      EndNode.tsx
+
+├── dialogs/
+│      AddNodeDialog.tsx
+
+├── data/
+│      initialNodes.ts
+│      initialEdges.ts
+
+├── types.ts
+├── nodeTypes.ts
+└── flowStore.ts
+
+lib/
+
+flowEngine.ts
+Features
+
+✅ Drag Drop Nodes
+
+✅ Connect Nodes
+
+✅ Delete Node
+
+✅ Duplicate Node
+
+✅ Zoom
+
+✅ MiniMap
+
+✅ Controls
+
+✅ Save
+
+✅ Publish
+
+✅ Active Toggle
+
+✅ Undo
+
+✅ Redo
+
+✅ Auto Layout
+
+Sidebar Nodes
+TRIGGERS
+
+Customer Message
+
+New Contact
+
+Webhook
+
+Schedule
+
+Conversation Open
+
+Conversation Closed
+
+────────────────────
+
+LOGIC
+
+Condition
+
+Switch
+
+Wait
+
+Delay
+
+────────────────────
+
+AI
+
+AI Reply
+
+AI Classification
+
+Ask AI
+
+────────────────────
+
+MESSAGES
+
+Send Message
+
+Send Template
+
+Send Image
+
+Send Document
+
+────────────────────
+
+CRM
+
+Assign Agent
+
+Add Tag
+
+Remove Tag
+
+Update Contact
+
+────────────────────
+
+INTEGRATIONS
+
+HTTP Request
+
+Webhook
+
+Google Sheets
+
+CRM
+
+────────────────────
+
+END
+Canvas
++-----------------------------------------------------------+
+
+Toolbar
+
+------------------------------------------------------------
+
+Trigger
+
+↓
+
+Condition
+
+↙         ↘
+
+AI        Send Message
+
+↓
+
+Wait
+
+↓
+
+Send Template
+
+↓
+
+Assign Agent
+
+↓
+
+End
+
+------------------------------------------------------------
+
+MiniMap
+
+Controls
+
+Properties Panel
+
++-----------------------------------------------------------+
+Node Types
+Trigger
+
+Condition
+
+Send Message
+
+Template
+
+AI Reply
+
+Wait
+
+Assign
+
+Webhook
+
+HTTP
+
+Tag
+
+Switch
+
+End
+Property Panel
+
+Click node
+
+↓
+
+Show
+
+Node Name
+
+Trigger
+
+Customer Message
+
+Contains
+
+Hi
+
+Save
+Database
+flows
+
+id
+
+workspace_id
+
+name
+
+status
+
+version
+
+created_at
+flow_nodes
+
+id
+
+flow_id
+
+type
+
+position
+
+config
+flow_edges
+
+id
+
+flow_id
+
+source
+
+target
+APIs
+GET /api/flows
+
+POST /api/flows
+
+PATCH /api/flows/:id
+
+DELETE /api/flows/:id
+GET /api/flows/:id
+POST /api/flows/run
+Packages
+npm install reactflow zustand
+npm install react-hook-form zod
+npm install clsx
+npm install lucide-react
+npm install nanoid
+Development Plan (We'll build in this order)
+Part 1 ✅ Layout
+page.tsx
+Part 2
+FlowCanvas.tsx
+Part 3
+Sidebar
+Part 4
+Topbar
+Part 5
+Properties Panel
+Part 6
+Custom Nodes
+Part 7
+Drag Drop
+Part 8
+Save Flow
+Part 9
+Load Flow
+Part 10
+Backend APIs
+Part 11
+Flow Execution Engine
+Part 12
+Webhook Integration

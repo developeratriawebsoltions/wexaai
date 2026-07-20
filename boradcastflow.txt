@@ -1,0 +1,227 @@
+Broadcast Flow
+Dashboard
+      │
+      ▼
+Broadcast
+      │
+      ▼
+Create Campaign
+      │
+      ▼
+Select Template
+      │
+      ▼
+Select Contacts
+      │
+      ▼
+Send
+      │
+      ▼
+Backend
+      │
+      ▼
+For Loop
+      │
+      ▼
+Meta API
+      │
+      ▼
+Save Status
+Step 1
+
+User clicks
+
+Broadcast
+
+↓
+
+New Broadcast
+Step 2
+
+Form
+
+Campaign Name
+
+Weekend Sale
+
+Template
+
+summer_offer
+
+Audience
+
+All Contacts
+
+Schedule
+
+No
+
+[Send]
+Step 3
+
+Backend
+
+POST /api/broadcasts
+Step 4
+
+Backend gets contacts
+
+const contacts = await Contact.find({
+    workspaceId
+});
+Step 5
+
+Simple Loop
+
+for (const contact of contacts) {
+
+   await sendTemplate({
+
+      phone: contact.phone,
+
+      template: "summer_offer"
+
+   });
+
+}
+
+Bas.
+
+Abhi queue ki zarurat nahi.
+
+Step 6
+
+Database
+
+broadcasts
+id
+workspace_id
+campaign_name
+template_name
+status
+created_at
+broadcast_logs
+id
+
+broadcast_id
+
+contact_id
+
+phone
+
+status
+
+message_id
+
+created_at
+
+Status
+
+Pending
+
+Sent
+
+Failed
+Meta
+
+Har contact ke liye
+
+POST
+
+/messages
+
+Meta
+
+↓
+
+Returns
+
+message_id
+
+Database
+
+↓
+
+Update
+
+Sent
+Dashboard
+Broadcast
+
+────────────────────
+
+Weekend Sale
+
+500 Contacts
+
+498 Sent
+
+2 Failed
+Folder Structure
+modules
+
+broadcast
+
+controller.ts
+
+service.ts
+
+meta.service.ts
+
+routes.ts
+APIs
+POST /api/broadcasts
+
+GET /api/broadcasts
+
+GET /api/broadcasts/:id
+Production V1 Architecture
+Owner
+
+     │
+
+     ▼
+
+Broadcast Form
+
+     │
+
+     ▼
+
+Backend
+
+     │
+
+     ▼
+
+MongoDB
+
+     │
+
+     ▼
+
+Get Contacts
+
+     │
+
+     ▼
+
+Loop
+
+     │
+
+     ▼
+
+Meta API
+
+     │
+
+     ▼
+
+Save Status
+
+     │
+
+     ▼
+
+Dashboard

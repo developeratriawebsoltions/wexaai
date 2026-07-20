@@ -1,0 +1,354 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id              String            @id @default(cuid())
+  name            String
+  email           String            @unique
+  password        String
+  createdAt       DateTime          @default(now())
+  ownedWorkspaces Workspace[]
+  memberships     WorkspaceMember[]
+}
+
+model Workspace {
+  id                   String              @id @default(cuid())
+  name                 String
+  slug                 String              @unique
+  plan                 String              @default("free")
+  status               String              @default("active")
+  ownerId              String
+  createdAt            DateTime            @default(now())
+  owner                User                @relation(fields: [ownerId], references: [id])
+  members              WorkspaceMember[]
+  whatsappAccount      WhatsAppAccount?
+  messages             Message[]
+  conversations        Conversation[]
+  templates            Template[]
+  contacts             Contact[]
+  aiAgent              AiAgent?
+  knowledgeBase        KnowledgeBase[]
+  broadcasts           Broadcast[]
+  flows                Flow[]
+  settings             WorkspaceSettings?
+  notificationSettings NotificationSettings?
+  securitySettings     SecuritySettings?
+  apiKeys              ApiKey[]
+  webhooks             WebhookSettings?
+  activityLogs         ActivityLog[]
+}
+
+model WorkspaceMember {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        String    @default("agent")
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@unique([workspaceId, userId])
+}
+
+model WhatsAppAccount {
+  id            String    @id @default(cuid())
+  workspaceId   String    @unique
+  phoneNumberId String
+  wabaId        String
+  accessToken   String
+  businessName  String
+  status        String    @default("active")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  workspace     Workspace @relation(fields: [workspaceId], references: [id])
+}
+
+model Contact {
+  id            String         @id @default(cuid())
+  workspaceId   String
+  name          String         @default("Unknown")
+  phone         String
+  email         String?
+  tags          String[]       @default([])
+  createdAt     DateTime       @default(now())
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id])
+  conversations Conversation[]
+  messages      Message[]
+
+  @@unique([workspaceId, phone])
+}
+
+model Conversation {
+  id            String    @id @default(cuid())
+  workspaceId   String
+  contactId     String
+  contactPhone  String
+  contactName   String?
+  lastMessage   String    @default("")
+  lastMessageAt DateTime  @default(now())
+  unreadCount   Int       @default(0)
+  status        String    @default("open")
+  assignedTo    String?
+  createdAt     DateTime  @default(now())
+  workspace     Workspace @relation(fields: [workspaceId], references: [id])
+  contact       Contact   @relation(fields: [contactId], references: [id])
+  messages      Message[]
+
+  @@unique([workspaceId, contactPhone])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  workspaceId    String
+  conversationId String
+  contactId      String?
+  from           String
+  text           String
+  waMessageId    String?
+  direction      String       @default("inbound")
+  messageType    String       @default("text")
+  status         String       @default("received")
+  createdAt      DateTime     @default(now())
+  workspace      Workspace    @relation(fields: [workspaceId], references: [id])
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  contact        Contact?     @relation(fields: [contactId], references: [id])
+}
+
+model AiAgent {
+  id            String    @id @default(cuid())
+  workspaceId   String    @unique
+  name          String    @default("Wexa Assistant")
+  systemPrompt  String    @default("You are a helpful customer support assistant.")
+  model         String    @default("gpt-4o-mini")
+  temperature   Float     @default(0.5)
+  language      String    @default("English")
+  autoReply     Boolean   @default(false)
+  fallbackType  String    @default("assign_human")
+  businessHours Json?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  workspace     Workspace @relation(fields: [workspaceId], references: [id])
+}
+
+model KnowledgeBase {
+  id          String    @id @default(cuid())
+  workspaceId String
+  title       String
+  content     String
+  type        String    @default("FAQ")
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+}
+
+model Broadcast {
+  id           String         @id @default(cuid())
+  workspaceId  String
+  campaignName String
+  templateName String
+  audience     String         @default("all")
+  status       String         @default("pending")
+  totalCount   Int            @default(0)
+  sentCount    Int            @default(0)
+  failedCount  Int            @default(0)
+  createdAt    DateTime       @default(now())
+  workspace    Workspace      @relation(fields: [workspaceId], references: [id])
+  logs         BroadcastLog[]
+}
+
+model Flow {
+  id          String      @id @default(cuid())
+  workspaceId String
+  name        String
+  status      String      @default("draft")
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id])
+  nodes       FlowNode[]
+  edges       FlowEdge[]
+}
+
+model FlowNode {
+  id        String   @id @default(cuid())
+  flowId    String
+  type      String
+  positionX Float    @default(0)
+  positionY Float    @default(0)
+  config    Json     @default("{}")
+  flow      Flow     @relation(fields: [flowId], references: [id], onDelete: Cascade)
+}
+
+model FlowEdge {
+  id     String @id @default(cuid())
+  flowId String
+  source String
+  target String
+  flow   Flow   @relation(fields: [flowId], references: [id], onDelete: Cascade)
+}
+
+model Plan {
+  id             String         @id @default(cuid())
+  name           String         @unique
+  price          Int
+  contactsLimit  Int
+  messagesLimit  Int
+  aiLimit        Int
+  teamLimit      Int
+  subscriptions  Subscription[]
+}
+
+model Subscription {
+  id                    String    @id @default(cuid())
+  workspaceId           String    @unique
+  planId                String
+  status                String    @default("active")
+  startDate             DateTime  @default(now())
+  endDate               DateTime?
+  nextBillingDate       DateTime?
+  paymentGateway        String    @default("razorpay")
+  gatewaySubscriptionId String?
+  plan                  Plan      @relation(fields: [planId], references: [id])
+  payments              Payment[]
+  invoices              Invoice[]
+}
+
+model Invoice {
+  id             String       @id @default(cuid())
+  workspaceId    String
+  subscriptionId String
+  invoiceNumber  String       @unique
+  amount         Int
+  status         String       @default("paid")
+  pdfUrl         String?
+  createdAt      DateTime     @default(now())
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id])
+}
+
+model Payment {
+  id               String       @id @default(cuid())
+  subscriptionId   String
+  gateway          String
+  gatewayPaymentId String
+  amount           Int
+  status           String       @default("success")
+  createdAt        DateTime     @default(now())
+  subscription     Subscription @relation(fields: [subscriptionId], references: [id])
+}
+
+model UsageLog {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  contactsUsed  Int      @default(0)
+  messagesUsed  Int      @default(0)
+  aiUsed        Int      @default(0)
+  createdAt     DateTime @default(now())
+}
+
+model BroadcastLog {
+  id          String    @id @default(cuid())
+  broadcastId String
+  contactId   String
+  phone       String
+  status      String    @default("pending")
+  messageId   String?
+  createdAt   DateTime  @default(now())
+  broadcast   Broadcast @relation(fields: [broadcastId], references: [id])
+}
+
+model Template {
+  id             String    @id @default(cuid())
+  workspaceId    String
+  metaTemplateId String?
+  name           String
+  category       String
+  language       String    @default("en")
+  header         String?
+  headerType     String?
+  body           String
+  footer         String?
+  buttons        Json?
+  status         String    @default("PENDING")
+  rejectedReason String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  workspace      Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@unique([workspaceId, name, language])
+}
+
+// Settings Tables
+model WorkspaceSettings {
+  id          String    @id @default(cuid())
+  workspaceId String    @unique
+  email       String
+  phone       String?
+  timezone    String    @default("Asia/Kolkata")
+  language    String    @default("en")
+  logo        String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model NotificationSettings {
+  id                 String    @id @default(cuid())
+  workspaceId        String    @unique
+  emailNotifications Boolean   @default(true)
+  whatsappAlerts     Boolean   @default(false)
+  newConversation    Boolean   @default(true)
+  broadcastCompleted Boolean   @default(true)
+  paymentFailed      Boolean   @default(true)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  workspace          Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model SecuritySettings {
+  id          String    @id @default(cuid())
+  workspaceId String    @unique
+  twoFactorEnabled Boolean @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String    @default("API Key")
+  key         String    @unique
+  secret      String
+  lastUsed    DateTime?
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model WebhookSettings {
+  id          String    @id @default(cuid())
+  workspaceId String    @unique
+  url         String
+  events      String[]  @default([])
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model ActivityLog {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  action      String
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([userId])
+}

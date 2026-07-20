@@ -1,0 +1,40 @@
+WEBHOOK EXPLANATION
+===================
+
+Meta Webhook URL (Same for all users):
+  https://yourdomain.com/api/webhook/meta
+
+Local Development:
+  http://localhost:3000/api/webhook/meta
+
+Verify Token:
+  wexa_verify_2026
+
+
+HOW IT WORKS
+------------
+- Webhook URL ek hi hota hai poore app ke liye (per user alag nahi hota)
+- Jab Meta koi message bhejta hai, woh phone_number_id ke saath bhejta hai
+- Server us phone_number_id se database mein workspace dhundta hai
+- Phir sahi user/workspace ka message process hota hai
+
+Flow:
+  Meta → /api/webhook/meta (ek URL)
+              ↓
+       phone_number_id se
+       workspace dhundho DB mein
+              ↓
+       Sahi user ka message process karo
+
+
+EACH USER KO KYA KARNA HAI
+---------------------------
+1. Meta Developer Portal pe jaao
+2. Apna Phone Number ID aur Access Token lo
+3. Wexa app mein /dashboard/integrations/whatsapp-cloud-api pe jaao
+4. Webhook URL aur Verify Token paste karo Meta App mein
+5. Phone Number ID, WABA ID aur Access Token fill karo
+6. Save & Connect karo
+
+Database mein phoneNumberId → workspaceId mapping store hoti hai
+jisse har user ka data alag alag handle hota hai.

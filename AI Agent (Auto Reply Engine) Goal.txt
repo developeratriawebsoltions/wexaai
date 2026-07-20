@@ -1,0 +1,442 @@
+Phase 7 - AI Agent (Auto Reply Engine)
+Goal
+
+Customer WhatsApp par message bheje.
+
+↓
+
+AI automatically reply kare.
+
+↓
+
+Agar AI answer na de sake
+
+↓
+
+Human Agent ko assign ho jaye.
+
+Complete Flow
+Customer
+
+"Price kya hai?"
+
+      │
+      ▼
+
+Meta Cloud API
+
+      │
+      ▼
+
+Webhook
+
+      │
+      ▼
+
+Save Message
+
+      │
+      ▼
+
+Load Workspace
+
+      │
+      ▼
+
+Load AI Agent Settings
+
+      │
+      ▼
+
+Knowledge Base
+
+      │
+      ▼
+
+OpenAI API
+
+      │
+      ▼
+
+Generate Reply
+
+      │
+      ▼
+
+Save Reply
+
+      │
+      ▼
+
+Meta Send API
+
+      │
+      ▼
+
+Customer gets reply
+Dashboard
+Dashboard
+
+AI Agent
+
+──────────────────────────
+
+Agent Name
+
+Wexa Assistant
+
+Prompt
+
+You are customer support...
+
+Model
+
+GPT-5.5
+
+Temperature
+
+0.5
+
+Language
+
+English
+
+Auto Reply
+
+ON
+
+Business Hours
+
+9AM - 7PM
+
+Fallback
+
+Assign Human
+
+Save
+Database
+ai_agents
+
+id
+
+workspace_id
+
+name
+
+system_prompt
+
+model
+
+temperature
+
+language
+
+auto_reply
+
+fallback_type
+
+business_hours
+
+created_at
+Knowledge Base
+
+AI ko business ka data chahiye.
+
+knowledge_base
+
+id
+
+workspace_id
+
+title
+
+content
+
+type
+
+FAQ
+
+Website
+
+PDF
+
+created_at
+
+Example
+
+Title
+
+Shipping Policy
+
+Content
+
+Delivery takes 3 days.
+Incoming Message
+
+Customer
+
+Hi
+
+What is delivery time?
+
+Webhook receives
+
+↓
+
+Save Message
+
+↓
+
+Load AI Prompt
+
+You are Electronics Support Agent.
+
+↓
+
+Load Knowledge
+
+Delivery takes 3 days.
+
+↓
+
+OpenAI
+
+↓
+
+Reply
+
+Delivery usually takes 3 business days.
+
+↓
+
+Meta API
+
+↓
+
+Customer
+
+AI Prompt Example
+You are the official support assistant for ABC Electronics.
+
+Rules:
+
+Answer politely.
+
+Never guess.
+
+If answer unavailable,
+say:
+
+"I'll connect you with our support team."
+
+Always use English.
+OpenAI Request
+
+Backend
+
+System Prompt
+
++
+
+Knowledge Base
+
++
+
+Customer Message
+
+↓
+
+OpenAI
+
+↓
+
+AI Response
+Save Reply
+
+Database
+
+messages
+
+direction
+
+Outgoing
+
+sender
+
+AI
+
+body
+
+Delivery takes 3 days.
+Human Handoff
+
+AI confidence low
+
+↓
+
+Instead of reply
+
+Create Assignment
+
+conversation
+
+assigned_to
+
+Rahul
+
+Dashboard
+
+Rahul
+
+New Conversation
+
+Needs Attention
+Auto Reply Toggle
+
+Dashboard
+
+AI Auto Reply
+
+ON
+
+OFF
+
+OFF
+
+↓
+
+Only Human Reply
+
+APIs
+AI Settings
+GET
+
+/api/ai-agent
+PATCH
+
+/api/ai-agent
+Knowledge Base
+POST
+
+/api/knowledge
+GET
+
+/api/knowledge
+DELETE
+
+/api/knowledge/:id
+AI Reply
+POST
+
+/api/ai/reply
+Folder Structure
+modules
+
+ai
+
+controller.ts
+
+service.ts
+
+prompt.service.ts
+
+knowledge.service.ts
+
+openai.service.ts
+
+reply.service.ts
+Real Example
+
+Customer
+
+Hi
+
+Do you have iPhone 16?
+
+↓
+
+Webhook
+
+↓
+
+Database
+
+↓
+
+Workspace
+
+↓
+
+Knowledge Base
+
+iPhone 16
+
+Available
+
+₹79,999
+
+↓
+
+OpenAI
+
+↓
+
+Reply
+
+Yes!
+
+The iPhone 16 is available for ₹79,999.
+
+Would you like to place an order?
+
+↓
+
+Meta API
+
+↓
+
+Customer receives reply.
+
+Future Features
+
+Baad me tum AI Agent me aur features add kar sakte ho:
+
+🧠 Multiple AI Agents (Sales Agent, Support Agent, Booking Agent)
+🌍 Multi-language replies
+📄 PDF knowledge base
+🌐 Website crawling
+📊 Conversation memory
+🔁 Escalation rules
+⏰ Business hours automation
+Final Architecture
+Customer
+      │
+      ▼
+Webhook
+      │
+      ▼
+Save Message
+      │
+      ▼
+Find Workspace
+      │
+      ▼
+Load AI Agent
+      │
+      ▼
+Load Knowledge Base
+      │
+      ▼
+OpenAI API
+      │
+      ▼
+Generate AI Reply
+      │
+      ▼
+Save Reply
+      │
+      ▼
+Meta Send API
+      │
+      ▼
+Customer

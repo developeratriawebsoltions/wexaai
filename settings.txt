@@ -1,0 +1,375 @@
+/dashboard/settings Wexa AI ka Control Center hoga.
+
+Yahan se business owner apni company, team, AI, notifications, security aur integrations manage karega.
+
+Production SaaS me Settings page ko ek hi page nahi, multiple tabs me divide karna best practice hai.
+
+Complete Settings Structure
+Settings
+
+├── General
+├── Workspace
+├── Team
+├── AI Agent
+├── WhatsApp
+├── Notifications
+├── Security
+├── API Keys
+├── Webhooks
+├── Billing
+├── Danger Zone
+1. General
+
+Business ki basic information.
+
+Business Name
+
+ABC Electronics
+
+Business Email
+
+support@abc.com
+
+Phone
+
++91 XXXXX XXXXX
+
+Timezone
+
+Asia/Kolkata
+
+Language
+
+English
+
+Logo
+
+Upload
+
+Save
+
+Database
+
+workspaces
+
+id
+
+name
+
+email
+
+phone
+
+logo
+
+timezone
+
+language
+2. Workspace
+
+Workspace details.
+
+Workspace Name
+
+ABC Electronics
+
+Workspace Slug
+
+abc-electronics
+
+Workspace ID
+
+wx_123456789
+
+Created
+
+20 July 2026
+
+Actions
+
+Rename Workspace
+
+Transfer Ownership
+3. Team
+
+Manage members.
+
+Anand
+
+Owner
+
+Rahul
+
+Admin
+
+Priya
+
+Support
+
++ Invite Member
+
+Permissions
+
+Inbox
+
+Broadcast
+
+Flows
+
+AI
+
+Templates
+
+Billing
+4. AI Agent
+
+Configure AI.
+
+AI Enabled
+
+ON
+
+Model
+
+GPT-5.5
+
+Prompt
+
+You are support assistant...
+
+Temperature
+
+0.5
+
+Fallback
+
+Assign Human
+
+Database
+
+ai_agents
+5. WhatsApp
+
+Connected number.
+
+Business Name
+
+ABC Electronics
+
+Phone Number
+
++91....
+
+Status
+
+Connected
+
+Reconnect
+
+Disconnect
+
+Sync Templates
+
+Webhook Status
+
+Database
+
+whatsapp_accounts
+6. Notifications
+Email Notifications
+
+ON
+
+WhatsApp Alerts
+
+OFF
+
+New Conversation
+
+ON
+
+Broadcast Completed
+
+ON
+
+Payment Failed
+
+ON
+7. Security
+Change Password
+
+Two Factor Authentication
+
+Active Sessions
+
+Logout All Devices
+
+Login History
+8. API Keys
+
+For developers.
+
+Secret Key
+
+**************
+
+Generate New
+
+Copy
+
+Database
+
+api_keys
+9. Webhooks
+
+User wants external integration.
+
+Webhook URL
+
+https://client.com/webhook
+
+Events
+
+Conversation Created
+
+Message Received
+
+Broadcast Finished
+
+Save
+
+Whenever an event happens, Wexa AI sends a POST request.
+
+Example
+
+New Conversation
+
+↓
+
+POST
+
+client webhook
+
+↓
+
+CRM
+10. Billing
+
+Shortcut.
+
+Current Plan
+
+Professional
+
+Renew
+
+28 Aug
+
+Upgrade
+11. Danger Zone
+Delete Workspace
+
+Export Data
+
+Disconnect WhatsApp
+
+Delete All Contacts
+
+Always require confirmation.
+
+Database Tables
+workspaces
+
+workspace_settings
+
+team_members
+
+api_keys
+
+notification_settings
+
+security_settings
+
+webhook_settings
+
+whatsapp_accounts
+APIs
+GET /api/settings
+
+PATCH /api/settings/general
+
+PATCH /api/settings/workspace
+
+PATCH /api/settings/security
+
+PATCH /api/settings/notifications
+
+PATCH /api/settings/ai
+
+PATCH /api/settings/whatsapp
+
+PATCH /api/settings/webhooks
+Complete Flow
+User Login
+
+      │
+
+      ▼
+
+Settings
+
+      │
+
+      ▼
+
+Choose Tab
+
+      │
+
+      ▼
+
+Update Form
+
+      │
+
+      ▼
+
+Backend Validation
+
+      │
+
+      ▼
+
+Save Database
+
+      │
+
+      ▼
+
+Success
+Recommended Sidebar
+⚙ Settings
+
+────────────────────
+
+General
+
+Workspace
+
+Team
+
+AI Agent
+
+WhatsApp
+
+Notifications
+
+Security
+
+API Keys
+
+Webhooks
+
+Billing
+
+Danger Zone

@@ -1,0 +1,349 @@
+Billing & Subscription
+Goal
+
+User apna plan purchase kare, upgrade kare, invoices dekhe aur usage monitor kare.
+
+Complete Flow
+User Login
+      │
+      ▼
+Dashboard
+      │
+      ▼
+Billing
+      │
+      ▼
+Choose Plan
+      │
+      ▼
+Payment Gateway
+(Razorpay/Stripe)
+      │
+      ▼
+Payment Success
+      │
+      ▼
+Webhook
+      │
+      ▼
+Update Subscription
+      │
+      ▼
+Unlock Features
+Billing Page Sections
+Billing
+
+├── Overview
+├── Current Plan
+├── Usage
+├── Upgrade Plan
+├── Payment Method
+├── Billing History
+├── Invoices
+├── Cancel Subscription
+└── Settings
+1. Current Plan
+
+Shows:
+
+Professional
+
+₹2999/month
+
+Status
+
+Active
+
+Renew Date
+
+28 Aug 2026
+
+Upgrade Plan
+2. Usage
+
+Track monthly limits.
+
+Contacts
+
+12,500 / 25,000
+
+Messages
+
+82,000 / 100,000
+
+AI Credits
+
+18,000 / 25,000
+
+Team Members
+
+4 / 10
+
+Backend checks these values before allowing new actions.
+
+3. Plans
+
+Example plans:
+
+Starter
+
+₹999
+
+5000 Contacts
+
+────────────
+
+Professional
+
+₹2999
+
+25000 Contacts
+
+────────────
+
+Enterprise
+
+Custom
+4. Payment
+
+User clicks
+
+Upgrade
+
+↓
+
+Backend
+
+↓
+
+Create Order
+
+↓
+
+Open Razorpay Checkout
+
+↓
+
+Payment Success
+
+Razorpay Flow
+User
+
+↓
+
+Choose Plan
+
+↓
+
+Backend
+
+↓
+
+Create Razorpay Order
+
+↓
+
+Checkout
+
+↓
+
+Payment Success
+
+↓
+
+Razorpay Webhook
+
+↓
+
+Update Database
+Database
+plans
+id
+
+name
+
+price
+
+contacts_limit
+
+messages_limit
+
+ai_limit
+
+team_limit
+subscriptions
+id
+
+workspace_id
+
+plan_id
+
+status
+
+start_date
+
+end_date
+
+next_billing_date
+
+payment_gateway
+
+gateway_subscription_id
+invoices
+id
+
+workspace_id
+
+invoice_number
+
+amount
+
+status
+
+pdf_url
+
+created_at
+payments
+id
+
+subscription_id
+
+gateway
+
+gateway_payment_id
+
+amount
+
+status
+
+created_at
+usage_logs
+id
+
+workspace_id
+
+contacts_used
+
+messages_used
+
+ai_used
+
+created_at
+APIs
+Plans
+GET /api/plans
+Current Subscription
+GET /api/billing/subscription
+Upgrade
+POST /api/billing/upgrade
+Cancel
+PATCH /api/billing/cancel
+Invoices
+GET /api/billing/invoices
+Usage
+GET /api/billing/usage
+Feature Access Logic
+
+Every protected feature checks subscription limits.
+
+Example:
+
+User wants Broadcast
+
+↓
+
+Subscription Active?
+
+↓
+
+YES
+
+↓
+
+Messages Remaining?
+
+↓
+
+YES
+
+↓
+
+Allow Broadcast
+
+↓
+
+Increase Usage Counter
+
+If limit exceeded:
+
+Upgrade Required
+Invoice Flow
+Payment Success
+
+↓
+
+Generate Invoice
+
+↓
+
+Save Database
+
+↓
+
+Email Invoice
+
+↓
+
+Show in Dashboard
+Folder Structure
+modules/
+
+billing/
+
+├── controller.ts
+├── service.ts
+├── plans.service.ts
+├── subscription.service.ts
+├── payment.service.ts
+├── invoice.service.ts
+├── usage.service.ts
+└── webhook.service.ts
+Production Billing Flow
+User
+      │
+      ▼
+Billing Page
+      │
+      ▼
+Choose Plan
+      │
+      ▼
+Create Order
+      │
+      ▼
+Razorpay Checkout
+      │
+      ▼
+Payment Success
+      │
+      ▼
+Razorpay Webhook
+      │
+      ▼
+Update Subscription
+      │
+      ▼
+Reset Usage Limits
+      │
+      ▼
+Unlock Premium Features
+Wexa AI Plans Example
+Feature	Free	Starter	Professional	Enterprise
+Contacts	100	5,000	25,000	Unlimited
+Monthly Messages	500	20,000	100,000	Custom
+AI Replies	100	5,000	25,000	Unlimited
+Team Members	1	3	10	Unlimited
+Broadcast	❌	✅	✅	✅
+AI Agent	❌	Basic	Advanced	Custom
+Flows	1	10	Unlimited	Unlimited
+API Access	❌	❌	✅	

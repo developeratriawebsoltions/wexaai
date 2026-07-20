@@ -1,0 +1,460 @@
+Ye bahut important feature hai. /dashboard/flows ka matlab hai Automation Builder.
+
+Is page par user drag-and-drop workflow banata hai. Jaise n8n, Zapier, ya ManyChat.
+
+Real Example
+
+Customer message bhejta hai:
+
+"Price"
+
+Flow automatically chalega.
+
+Customer
+    │
+    ▼
+Message = "Price"
+    │
+    ▼
+AI Reply
+    │
+    ▼
+Wait 2 Minutes
+    │
+    ▼
+Send Product Catalog
+    │
+    ▼
+Assign Sales Agent
+Dashboard Flow
+Dashboard
+
+Flows
+
+────────────────────────
+
++ New Flow
+
+Lead Capture
+
+Order Support
+
+Appointment Booking
+
+Abandoned Cart
+
+Welcome Message
+User Clicks
+New Flow
+
+Canvas open hota hai.
+
++-------------------------------+
+
+Trigger
+
+[Customer Sends Message]
+
+↓
+
+Condition
+
+If message contains
+
+"Price"
+
+↓
+
+Action
+
+AI Reply
+
+↓
+
+Action
+
+Send Catalog
+
+↓
+
+Action
+
+Assign Team
+
++-------------------------------+
+Flow Components
+1. Trigger
+
+Flow kab start hoga?
+
+Examples
+
+Customer Message
+
+New Contact
+
+Template Delivered
+
+Payment Success
+
+Order Created
+
+Webhook
+
+Manual Start
+2. Condition
+
+Decision
+
+Message contains
+
+Price
+
+ya
+
+Customer Tag
+
+Premium
+
+ya
+
+Language
+
+English
+3. Action
+
+Kya karna hai?
+
+Send Message
+
+AI Reply
+
+Assign Agent
+
+Add Tag
+
+Wait
+
+Webhook
+
+Update Contact
+
+Create Ticket
+
+Send Template
+
+Call API
+Example Flow
+
+Customer
+
+Hi
+
+↓
+
+Trigger
+
+↓
+
+AI
+
+↓
+
+Reply
+
+Hello 👋
+
+Welcome to ABC Electronics.
+
+↓
+
+Wait
+
+5 Minutes
+
+↓
+
+Send
+
+Need any help?
+Database
+flows
+id
+
+workspace_id
+
+name
+
+status
+
+created_at
+flow_nodes
+id
+
+flow_id
+
+type
+
+position_x
+
+position_y
+
+config
+
+Example
+
+Trigger
+
+Customer Message
+flow_edges
+id
+
+flow_id
+
+source
+
+target
+
+Example
+
+Trigger
+
+↓
+
+AI Reply
+
+↓
+
+Wait
+
+↓
+
+Send Message
+Execution
+
+Webhook receives
+
+↓
+
+Find Workspace
+
+↓
+
+Check Active Flows
+
+↓
+
+Trigger Match?
+
+↓
+
+Run Flow
+
+↓
+
+Execute Actions
+
+Example
+
+Flow
+
+Customer says
+
+"Price"
+
+↓
+
+Condition
+
+Contains Price
+
+↓
+
+AI
+
+↓
+
+Reply
+
+↓
+
+Send Product Catalog
+
+↓
+
+Done
+
+APIs
+GET /api/flows
+
+POST /api/flows
+
+PATCH /api/flows/:id
+
+DELETE /api/flows/:id
+Execute Flow
+POST /api/flows/run
+Folder Structure
+modules
+
+flows
+
+controller.ts
+
+service.ts
+
+engine.ts
+
+nodes.ts
+
+conditions.ts
+
+actions.ts
+Flow Engine
+Webhook
+
+↓
+
+Message
+
+↓
+
+Find Active Flow
+
+↓
+
+Check Trigger
+
+↓
+
+Condition True?
+
+↓
+
+Execute Node
+
+↓
+
+Next Node
+
+↓
+
+Complete
+Dashboard UI
+Flows
+
+──────────────────────────────
+
++ New Flow
+
+Lead Capture
+
+● Active
+
+Order Support
+
+● Active
+
+Appointment
+
+○ Draft
+
+Welcome Flow
+
+● Active
+
+──────────────────────────────
+Example: Lead Capture
+Trigger
+
+Customer Sends "Hi"
+
+↓
+
+AI Reply
+
+↓
+
+Ask Name
+
+↓
+
+Save Contact
+
+↓
+
+Ask Email
+
+↓
+
+Assign Sales Agent
+
+↓
+
+End
+Example: Order Tracking
+Trigger
+
+Customer says
+
+Track Order
+
+↓
+
+Ask Order ID
+
+↓
+
+Call API
+
+↓
+
+Send Order Status
+
+↓
+
+End
+Production Architecture
+Customer
+
+      │
+
+      ▼
+
+Webhook
+
+      │
+
+      ▼
+
+Find Workspace
+
+      │
+
+      ▼
+
+Find Active Flow
+
+      │
+
+      ▼
+
+Check Trigger
+
+      │
+
+      ▼
+
+Run Flow Engine
+
+      │
+
+      ▼
+
+Execute Actions
+
+      │
+
+      ▼
+
+Reply Customer

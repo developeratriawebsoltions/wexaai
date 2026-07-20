@@ -1,0 +1,195 @@
+@import "tailwindcss";
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/inter/700.css";
+@import "@fontsource/sora/600.css";
+@import "@fontsource/sora/700.css";
+@import "@fontsource/sora/800.css";
+
+@theme {
+  --font-inter: "Inter", system-ui, sans-serif;
+  --font-sora: "Sora", sans-serif;
+}
+
+:root {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+
+  --brand: #22c55e;
+  --brand-dark: #16a34a;
+  --brand-foreground: #ffffff;
+
+  --primary: #22c55e;
+  --primary-foreground: #ffffff;
+
+  --secondary: #f8fafc;
+  --surface: #ffffff;
+  --surface-muted: #f1f5f9;
+  --muted: #475569;
+
+  --border: #e2e8f0;
+  --shadow: 0 25px 55px rgba(15, 23, 42, 0.08);
+
+  --radius: 0.75rem;
+}
+
+.dark {
+  --background: #09090b;
+  --foreground: #f8fafc;
+
+  --brand: #22c55e;
+  --brand-dark: #16a34a;
+  --brand-foreground: #09090b;
+
+  --primary: #22c55e;
+  --primary-foreground: #09090b;
+
+  --secondary: #18181b;
+  --surface: #111827;
+  --surface-muted: #1f2937;
+  --muted: #94a3b8;
+
+  --border: #27272a;
+  --shadow: 0 25px 55px rgba(0, 0, 0, 0.45);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4, h5, h6,
+.heading-xl, .heading-lg, .heading-md {
+  font-family: "Sora", sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  cursor: pointer;
+}
+
+/* ReactFlow requires parent to have explicit dimensions */
+.react-flow {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+.container {
+  width: 100%;
+  max-width: 1280px;
+  margin-inline: auto;
+  padding-inline: 1.5rem;
+}
+
+.section {
+  padding-block: 6rem;
+}
+
+.section-sm {
+  padding-block: 4rem;
+}
+
+.heading-xl {
+  font-size: clamp(2.8rem, 6vw, 5rem);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+}
+
+.heading-lg {
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.heading-md {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.text-muted {
+  color: var(--muted);
+}
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow:
+    0 4px 10px rgba(0,0,0,.03),
+    0 20px 40px rgba(0,0,0,.04);
+}
+
+.text-app-brand {
+  color: var(--brand);
+}
+
+.bg-app-brand {
+  background: var(--brand);
+}
+
+.bg-app-brand-dark {
+  background: var(--brand-dark);
+}
+
+.border-app-border {
+  border-color: var(--border);
+}
+
+.text-app-foreground {
+  color: var(--foreground);
+}
+
+.text-app-muted {
+  color: var(--muted);
+}
+
+.bg-app-surface {
+  background: var(--surface);
+}
+
+.bg-app-surface-muted {
+  background: var(--surface-muted);
+}
+
+.shadow-app {
+  box-shadow: var(--shadow);
+}
+
+.gradient-text {
+  background: linear-gradient(90deg, #16a34a, #22c55e);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.hero-bg {
+  background:
+    radial-gradient(circle at top left, rgba(34,197,94,.12), transparent 30%),
+    radial-gradient(circle at top right, rgba(34,197,94,.10), transparent 25%),
+    #ffffff;
+}
