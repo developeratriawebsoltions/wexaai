@@ -64,10 +64,17 @@ interface ContactModalProps {
   onSaved: () => void;
 }
 
+interface ImportRow {
+  name: string;
+  phone: string;
+  email: string;
+  tags: string[];
+}
+
 // ── IMPORT MODAL ─────────────────────────────────────────────────────────────
 function ImportModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
-  const [rows, setRows] = useState<Record<string, string>[]>([]);
+  const [rows, setRows] = useState<ImportRow[]>([]);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<{ imported: number; skipped: number; errors: string[] } | null>(null);
   const [parseError, setParseError] = useState("");
