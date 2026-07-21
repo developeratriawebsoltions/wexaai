@@ -29,6 +29,10 @@ async function sendTextMessage(phoneNumberId: string, accessToken: string, to: s
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify({ messaging_product: "whatsapp", to, type: "text", text: { body: text, preview_url: false } }),
   });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    console.error("[Flow] sendTextMessage failed:", JSON.stringify(err));
+  }
   return res.ok;
 }
 
@@ -39,6 +43,8 @@ async function sendTemplateMessage(
   templateName: string,
   language: string
 ) {
+  // Normalize language: "en" → "en_US", "hi" → "hi", already "en_US" stays
+  const langCode = language.includes("_") ? language : language === "en" ? "en_US" : language;
   const res = await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
@@ -46,9 +52,13 @@ async function sendTemplateMessage(
       messaging_product: "whatsapp",
       to,
       type: "template",
-      template: { name: templateName, language: { code: language } },
+      template: { name: templateName, language: { code: langCode } },
     }),
   });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    console.error("[Flow] sendTemplateMessage failed:", JSON.stringify(err));
+  }
   return res.ok;
 }
 
@@ -170,9 +180,13 @@ export async function POST(req: NextRequest) {
         const templateName     = typeof nodeCfg.templateName === "string" ? nodeCfg.templateName : "";
         const templateLanguage = typeof nodeCfg.templateLanguage === "string" ? nodeCfg.templateLanguage : "en";
         const typingDelay      = Number(nodeCfg.typingDelay) || 0;
+        console.log("[Flow] Sending template:", { templateName, templateLanguage, to: phone });
         if (templateName) {
           if (typingDelay > 0) await sleep(typingDelay * 1000);
-          await sendTemplateMessage(phoneNumberId, accessToken, phone, templateName, templateLanguage);
+          const ok = await sendTemplateMessage(phoneNumberId, accessToken, phone, templateName, templateLanguage);
+          console.log("[Flow] Template send result:", ok);
+        } else {
+          console.warn("[Flow] Template node has no templateName — skipping");
         }
       }
 
