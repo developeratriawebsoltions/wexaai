@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { handleAiReply } from "@/lib/ai-reply";
 import { normalizePhone } from "@/lib/apiHelpers";
+import { runFlow } from "@/lib/flow-runner";
 
 const VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN ?? "wexa_verify_2026";
 
@@ -118,15 +119,8 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Try to run an active flow — pass buttonPayload so condition nodes can match it
-    const flowRes = await fetch(`${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/api/flows/run`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ workspaceId, phone: contactPhone, message: text, buttonPayload }),
-    }).catch(() => null);
-
-    // Only run AI reply if no flow matched
-    const flowMatched = flowRes ? (await flowRes.json().catch(() => ({}))).matched : false;
+    // Try to run an active flow directly (no HTTP fetch — avoids SSRF and Vercel cold-start issues)
+    const { matched: flowMatched } = await runFlow({ workspaceId, phone: contactPhone, message: text, buttonPayload }).catch(() => ({ matched: false }));
     if (!flowMatched) {
       await handleAiReply(workspaceId, conversation.id, contactPhone, text).catch((err) => {
         console.error("[Webhook] AI reply failed:", err);
