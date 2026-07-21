@@ -46,7 +46,6 @@ async function sendTemplateMessage(
   templateName: string,
   language: string
 ) {
-  const langCode = language;
   const res = await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
@@ -54,7 +53,7 @@ async function sendTemplateMessage(
       messaging_product: "whatsapp",
       to: normalizeToPhone(to),
       type: "template",
-      template: { name: templateName, language: { code: langCode } },
+      template: { name: templateName, language: { code: language } },
     }),
   });
   if (!res.ok) {
@@ -86,16 +85,24 @@ export async function runFlow(params: {
   const normalizedMessage = message.toLowerCase();
   const normalizedButton  = buttonPayload.toLowerCase() || normalizedMessage;
 
+  console.log("[Flow] runFlow called:", { workspaceId, phone, message, buttonPayload, totalFlows: flows.length });
+
   for (const flow of flows) {
     const trigger = flow.nodes.find((n: FlowNodeLike) => n.type === "trigger");
-    if (!trigger) continue;
+    if (!trigger) { console.log("[Flow] No trigger in flow:", flow.name); continue; }
 
     const triggerCfg   = cfg(trigger);
     const triggerEvent = typeof triggerCfg.event === "string" ? triggerCfg.event : "message";
     const keyword      = typeof triggerCfg.keyword === "string" ? triggerCfg.keyword.toLowerCase() : "";
 
-    if (triggerEvent === "button_reply" && !buttonPayload) continue;
-    if (triggerEvent === "message" && keyword && !normalizedMessage.includes(keyword)) continue;
+    console.log("[Flow] Checking flow:", flow.name, { triggerEvent, keyword, buttonPayload, normalizedMessage });
+
+    // button_reply trigger: only match when buttonPayload present
+    if (triggerEvent === "button_reply" && !buttonPayload) { console.log("[Flow] Skip: button_reply trigger but no buttonPayload"); continue; }
+    // message trigger with keyword: skip keyword check if this is a button reply
+    if (triggerEvent === "message" && keyword && !buttonPayload && !normalizedMessage.includes(keyword)) { console.log("[Flow] Skip: keyword mismatch"); continue; }
+
+    console.log("[Flow] Flow matched, executing:", flow.name);
 
     const executed = new Set<string>();
     let currentNodeId: string | null = trigger.id;
@@ -105,7 +112,9 @@ export async function runFlow(params: {
       executed.add(currentNodeId);
 
       const node = flow.nodes.find((n: FlowNodeLike) => n.id === currentNodeId);
-      if (!node) break;
+      if (!node) { console.log("[Flow] Node not found:", currentNodeId); break; }
+
+      console.log("[Flow] Executing node:", { id: node.id, type: node.type });
 
       const nodeCfg = cfg(node);
 
@@ -162,7 +171,8 @@ export async function runFlow(params: {
       }
 
       // ── SEND TEMPLATE ──────────────────────────────────────────────────────
-      if (node.type === "template") {
+      // Skip re-sending template if this run was triggered by a button reply
+      if (node.type === "template" && !buttonPayload) {
         const templateName     = typeof nodeCfg.templateName === "string" ? nodeCfg.templateName : "";
         const templateLanguage = typeof nodeCfg.templateLanguage === "string" ? nodeCfg.templateLanguage : "en";
         const typingDelay      = Number(nodeCfg.typingDelay) || 0;
@@ -178,6 +188,7 @@ export async function runFlow(params: {
           ? (nodeCfg.templateButtons as string[])
           : [];
         const matchedIndex = buttons.findIndex((btn) => btn.toLowerCase() === normalizedButton);
+        console.log("[Flow] ButtonRouter:", { buttons, normalizedButton, matchedIndex });
         const edge =
           matchedIndex >= 0
             ? flow.edges.find(
@@ -185,6 +196,7 @@ export async function runFlow(params: {
                   e.source === currentNodeId && e.sourceHandle === `btn-${matchedIndex}`
               )
             : undefined;
+        console.log("[Flow] ButtonRouter edge:", edge ?? "NOT FOUND");
         currentNodeId = edge?.target ?? null;
         continue;
       }
