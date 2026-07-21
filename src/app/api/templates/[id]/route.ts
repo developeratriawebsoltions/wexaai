@@ -35,18 +35,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   type MetaParam = { type: string; text?: string; image?: { link: string }; video?: { link: string }; document?: { link: string } };
   const components: { type: string; parameters?: MetaParam[] }[] = [];
 
-  // IMAGE/VIDEO/DOCUMENT header — use headerHandle (Meta internal id)
-  if (template.headerType && template.headerType !== "TEXT" && template.headerHandle) {
-    const mediaType = template.headerType.toLowerCase() as "image" | "video" | "document";
-    components.push({
-      type: "header",
-      parameters: [{ type: mediaType, [mediaType]: { id: template.headerHandle } }],
-    });
+  if (template.headerType && template.header) {
+    const headerParam: MetaParam | null =
+      template.headerType === "TEXT"
+        ? { type: "text", text: template.header }
+        : template.headerType === "IMAGE"
+        ? { type: "image", image: { link: template.header } }
+        : template.headerType === "VIDEO"
+        ? { type: "video", video: { link: template.header } }
+        : template.headerType === "DOCUMENT"
+        ? { type: "document", document: { link: template.header } }
+        : null;
+
+    if (headerParam) {
+      components.push({ type: "header", parameters: [headerParam] });
+    }
   }
 
-  // Only add body variables if present
-  // Note: Do NOT send header component for IMAGE templates —
-  // Meta uses the registered image automatically
   if (variables?.body?.length) {
     components.push({
       type: "body",

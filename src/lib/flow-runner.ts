@@ -40,21 +40,51 @@ async function sendTextMessage(phoneNumberId: string, accessToken: string, to: s
 }
 
 async function sendTemplateMessage(
+  workspaceId: string,
   phoneNumberId: string,
   accessToken: string,
   to: string,
   templateName: string,
   language: string
 ) {
+  const template = await prisma.template.findUnique({
+    where: { workspaceId_name_language: { workspaceId, name: templateName, language } },
+  });
+
+  const components: { type: string; parameters?: { type: string; text?: string; image?: { link: string }; video?: { link: string }; document?: { link: string } }[] }[] = [];
+
+  if (template?.headerType && template.header) {
+    const headerParam =
+      template.headerType === "TEXT"
+        ? { type: "text", text: template.header }
+        : template.headerType === "IMAGE"
+        ? { type: "image", image: { link: template.header } }
+        : template.headerType === "VIDEO"
+        ? { type: "video", video: { link: template.header } }
+        : template.headerType === "DOCUMENT"
+        ? { type: "document", document: { link: template.header } }
+        : null;
+
+    if (headerParam) {
+      components.push({ type: "header", parameters: [headerParam] });
+    }
+  }
+
+  const metaPayload: Record<string, unknown> = {
+    messaging_product: "whatsapp",
+    to: normalizeToPhone(to),
+    type: "template",
+    template: {
+      name: templateName,
+      language: { code: language },
+      ...(components.length ? { components } : {}),
+    },
+  };
+
   const res = await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-    body: JSON.stringify({
-      messaging_product: "whatsapp",
-      to: normalizeToPhone(to),
-      type: "template",
-      template: { name: templateName, language: { code: language } },
-    }),
+    body: JSON.stringify(metaPayload),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -178,7 +208,7 @@ export async function runFlow(params: {
         const typingDelay      = Number(nodeCfg.typingDelay) || 0;
         if (templateName) {
           if (typingDelay > 0) await sleep(typingDelay * 1000);
-          await sendTemplateMessage(phoneNumberId, accessToken, phone, templateName, templateLanguage);
+          await sendTemplateMessage(workspaceId, phoneNumberId, accessToken, phone, templateName, templateLanguage);
         }
       }
 
