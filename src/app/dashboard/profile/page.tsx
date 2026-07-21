@@ -27,7 +27,7 @@ export default function ProfilePage() {
       .then((r) => r.json())
       .then((data) => {
         setProfile(data);
-        setName(data.name);
+        setName(data.name ?? "");
       });
   }, [token]);
 
@@ -62,7 +62,7 @@ export default function ProfilePage() {
     );
   }
 
-  const initials = profile.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+  const initials = (profile.name ?? "").split(" ").filter(Boolean).map((n) => n[0]).join("").toUpperCase().slice(0, 2) || "??";
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-[#f0f2f5]">
@@ -152,7 +152,7 @@ export default function ProfilePage() {
         <div className="rounded-xl border border-gray-200 bg-white p-6">
           <p className="mb-4 text-sm font-semibold text-gray-800">My Workspaces</p>
           <div className="space-y-3">
-            {profile.workspaces.map((ws) => (
+            {(profile.workspaces ?? []).map((ws) => (
               <div key={ws.id} className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
                 <div className="flex items-center gap-3">
                   <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-green-600 text-xs font-bold text-white">

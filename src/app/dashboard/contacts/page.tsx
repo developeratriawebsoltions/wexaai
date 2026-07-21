@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { Search, Filter, Edit2, Trash2, X, Plus, RefreshCw } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Search, Edit2, Trash2, X, Plus, RefreshCw, Upload, Download, CheckCircle2, AlertCircle } from "lucide-react";
 
 interface Contact {
   id: string;
@@ -64,6 +64,166 @@ interface ContactModalProps {
   onSaved: () => void;
 }
 
+// ── IMPORT MODAL ─────────────────────────────────────────────────────────────
+function ImportModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [rows, setRows] = useState<Record<string, string>[]>([]);
+  const [importing, setImporting] = useState(false);
+  const [result, setResult] = useState<{ imported: number; skipped: number; errors: string[] } | null>(null);
+  const [parseError, setParseError] = useState("");
+
+  const parseCSV = (text: string) => {
+    const lines = text.trim().split(/\r?\n/);
+    if (lines.length < 2) { setParseError("File must have a header row and at least one data row"); return; }
+    const headers = lines[0].split(",").map((h) => h.trim().toLowerCase().replace(/[^a-z]/g, ""));
+    const parsed = lines.slice(1).map((line) => {
+      const vals = line.split(",").map((v) => v.trim().replace(/^"|"$/g, ""));
+      const obj: Record<string, string> = {};
+      headers.forEach((h, i) => { obj[h] = vals[i] ?? ""; });
+      return obj;
+    }).filter((r) => r.phone || r.phonenumber || r.mobile || r.number);
+    if (parsed.length === 0) { setParseError("No valid rows found. Make sure file has a 'phone' column"); return; }
+    // normalize column names
+    const normalized = parsed.map((r) => ({
+      name: r.name || r.fullname || r.contactname || "",
+      phone: r.phone || r.phonenumber || r.mobile || r.number || "",
+      email: r.email || r.emailaddress || "",
+      tags: r.tags ? r.tags.split("|").map((t: string) => t.trim()).filter(Boolean) : [],
+    }));
+    setParseError("");
+    setRows(normalized);
+  };
+
+  const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => parseCSV(ev.target?.result as string);
+    reader.readAsText(file);
+  };
+
+  const doImport = async () => {
+    setImporting(true);
+    const res = await authFetch("/api/contacts/import", {
+      method: "POST",
+      body: JSON.stringify({ contacts: rows }),
+    });
+    const data = await res.json();
+    setResult(data);
+    setImporting(false);
+    if (data.imported > 0) onSaved();
+  };
+
+  const downloadSample = () => {
+    const csv = "name,phone,email,tags\nJohn Doe,919876543210,john@example.com,Lead|VIP\nJane Smith,15551234567,jane@example.com,Customer";
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download = "contacts_sample.csv";
+    a.click();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl">
+        <div className="mb-5 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-gray-900">Import Contacts</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+        </div>
+
+        {!result ? (
+          <>
+            {/* Instructions */}
+            <div className="mb-4 rounded-lg bg-blue-50 border border-blue-100 px-4 py-3">
+              <p className="text-xs font-semibold text-blue-700 mb-1">CSV Format Required</p>
+              <p className="text-xs text-blue-600">Columns: <span className="font-mono">name, phone, email, tags</span></p>
+              <p className="text-xs text-blue-500 mt-0.5">Phone must include country code (no +). Tags separated by |</p>
+              <button onClick={downloadSample} className="mt-2 flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium">
+                <Download size={12} /> Download sample CSV
+              </button>
+            </div>
+
+            {/* Upload area */}
+            <div
+              onClick={() => fileRef.current?.click()}
+              className="mb-4 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 py-10 cursor-pointer hover:border-green-400 hover:bg-green-50 transition-colors"
+            >
+              <Upload size={28} className="text-gray-300 mb-2" />
+              <p className="text-sm font-medium text-gray-500">Click to upload CSV file</p>
+              <p className="text-xs text-gray-400 mt-1">Only .csv files supported</p>
+              <input ref={fileRef} type="file" accept=".csv" onChange={onFile} className="hidden" />
+            </div>
+
+            {parseError && (
+              <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{parseError}</p>
+            )}
+
+            {/* Preview */}
+            {rows.length > 0 && (
+              <div className="mb-4">
+                <p className="text-xs font-semibold text-gray-600 mb-2">{rows.length} contacts ready to import — Preview (first 5):</p>
+                <div className="rounded-lg border border-gray-100 overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        {["Name", "Phone", "Email", "Tags"].map((h) => (
+                          <th key={h} className="px-3 py-2 text-left text-gray-500 font-medium">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.slice(0, 5).map((r, i) => (
+                        <tr key={i} className="border-t border-gray-50">
+                          <td className="px-3 py-2 text-gray-700">{r.name || "—"}</td>
+                          <td className="px-3 py-2 text-gray-700 font-mono">{r.phone}</td>
+                          <td className="px-3 py-2 text-gray-500">{r.email || "—"}</td>
+                          <td className="px-3 py-2 text-gray-500">{Array.isArray(r.tags) ? (r.tags as string[]).join(", ") : "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {rows.length > 5 && <p className="text-xs text-gray-400 mt-1">...and {rows.length - 5} more</p>}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <button onClick={onClose} className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={doImport} disabled={rows.length === 0 || importing}
+                className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50">
+                <Upload size={14} />
+                {importing ? "Importing..." : `Import ${rows.length} Contacts`}
+              </button>
+            </div>
+          </>
+        ) : (
+          /* Result screen */
+          <div className="flex flex-col items-center py-6 text-center">
+            <CheckCircle2 size={48} className="text-green-500 mb-3" />
+            <p className="text-lg font-semibold text-gray-800">Import Complete</p>
+            <div className="mt-4 flex gap-6">
+              <div className="text-center">
+                <p className="text-2xl font-bold text-green-600">{result.imported}</p>
+                <p className="text-xs text-gray-500">Imported</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-gray-400">{result.skipped}</p>
+                <p className="text-xs text-gray-500">Skipped</p>
+              </div>
+            </div>
+            {result.errors.length > 0 && (
+              <div className="mt-3 flex items-center gap-1 text-xs text-red-500">
+                <AlertCircle size={12} />
+                Failed: {result.errors.join(", ")}
+              </div>
+            )}
+            <button onClick={onClose} className="mt-6 rounded-lg bg-green-600 px-6 py-2 text-sm font-semibold text-white hover:bg-green-700">Done</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ContactModal({ contact, onClose, onSaved }: ContactModalProps) {
   const [name, setName] = useState(contact?.name ?? "");
   const [phone, setPhone] = useState(contact?.phone ?? "");
@@ -120,8 +280,10 @@ function ContactModal({ contact, onClose, onSaved }: ContactModalProps) {
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">Phone *</label>
             <input value={phone} onChange={(e) => setPhone(e.target.value)}
-              placeholder="919876543210" disabled={!!contact}
+              placeholder="e.g. 919876543210 (with country code)"
+              disabled={!!contact}
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-green-400 focus:ring-1 focus:ring-green-100 disabled:bg-gray-50 disabled:text-gray-400" />
+            <p className="mt-1 text-[11px] text-gray-400">Enter number with country code, no + or spaces. e.g. 919876543210 (India), 15551234567 (US)</p>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">Email</label>
@@ -170,6 +332,7 @@ export default function ContactsPage() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<string[]>([]);
   const [modal, setModal] = useState<{ open: boolean; contact?: Contact | null }>({ open: false });
+  const [importOpen, setImportOpen] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
 
   const LIMIT = 20;
@@ -253,6 +416,10 @@ export default function ContactsPage() {
               )}
               <button onClick={fetchContacts} className="rounded-lg border border-gray-200 p-1.5 text-gray-400 hover:bg-gray-50">
                 <RefreshCw size={14} />
+              </button>
+              <button onClick={() => setImportOpen(true)}
+                className="flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-100">
+                <Upload size={13} /> Import
               </button>
               <button onClick={() => setModal({ open: true, contact: null })}
                 className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700">
@@ -382,6 +549,10 @@ export default function ContactsPage() {
           )}
         </div>
       </div>
+
+      {importOpen && (
+        <ImportModal onClose={() => setImportOpen(false)} onSaved={fetchContacts} />
+      )}
 
       {modal.open && (
         <ContactModal

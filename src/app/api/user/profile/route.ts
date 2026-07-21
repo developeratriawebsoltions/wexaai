@@ -29,14 +29,24 @@ export async function GET(req: NextRequest) {
     select: { id: true, name: true, email: true, createdAt: true },
   });
 
-  const membership = await prisma.workspaceMember.findFirst({
+  const memberships = await prisma.workspaceMember.findMany({
     where: { userId: auth.id },
     include: { workspace: { select: { id: true, name: true, slug: true, plan: true, status: true } } },
   });
 
   return NextResponse.json({
-    user: { id: user?.id, name: user?.name, email: user?.email },
-    workspace: membership ? { id: membership.workspace.id, name: membership.workspace.name, slug: membership.workspace.slug, plan: membership.workspace.plan } : null,
+    id: user?.id,
+    name: user?.name,
+    email: user?.email,
+    createdAt: user?.createdAt,
+    workspaces: memberships.map((m: WorkspaceMembership) => ({
+      id: m.workspace.id,
+      name: m.workspace.name,
+      slug: m.workspace.slug,
+      plan: m.workspace.plan,
+      status: m.workspace.status,
+      role: m.role,
+    })),
   });
 }
 
