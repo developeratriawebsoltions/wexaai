@@ -22,11 +22,15 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function normalizeToPhone(phone: string) {
+  return phone.replace(/^\+/, "");
+}
+
 async function sendTextMessage(phoneNumberId: string, accessToken: string, to: string, text: string) {
   const res = await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-    body: JSON.stringify({ messaging_product: "whatsapp", to, type: "text", text: { body: text, preview_url: false } }),
+    body: JSON.stringify({ messaging_product: "whatsapp", to: normalizeToPhone(to), type: "text", text: { body: text, preview_url: false } }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -48,7 +52,7 @@ async function sendTemplateMessage(
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify({
       messaging_product: "whatsapp",
-      to,
+      to: normalizeToPhone(to),
       type: "template",
       template: { name: templateName, language: { code: langCode } },
     }),
