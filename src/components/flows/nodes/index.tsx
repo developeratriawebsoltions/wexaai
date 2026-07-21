@@ -36,7 +36,6 @@ const Card: React.FC<{
   >
     {hasTarget && <Handle type="target" position={Position.Top} className="!w-3 !h-3 !bg-gray-400 !border-2 !border-white" />}
 
-    {/* Header */}
     <div className="flex items-center gap-2.5 px-3 pt-3 pb-2">
       <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${iconBg}`}>
         <Icon size={15} className={iconColor} />
@@ -54,7 +53,6 @@ const Card: React.FC<{
       </div>
     </div>
 
-    {/* Info row */}
     {info && (
       <div className="mx-3 mb-3 rounded-lg bg-gray-50 border border-gray-100 px-2.5 py-1.5">
         <p className="text-[11px] text-gray-600 leading-snug">{info}</p>
@@ -72,6 +70,7 @@ export const TriggerNode: React.FC<CustomNodeProps> = ({ data, selected }) => {
     message: "Customer Sends Message",
     contact: "New Contact Added",
     template: "Template Delivered",
+    button_reply: "Template Button Reply",
   };
   const event = eventMap[data.event] || "Customer Sends Message";
   const info = data.keyword ? `Keyword: "${data.keyword}"` : "When customer sends a message";
@@ -92,6 +91,7 @@ export const TriggerNode: React.FC<CustomNodeProps> = ({ data, selected }) => {
 export const ConditionNode: React.FC<CustomNodeProps> = ({ data, selected }) => {
   const typeMap: Record<string, string> = {
     contains: "Message contains",
+    button_reply: "Button reply is",
     tag: "Contact has tag",
     language: "Language equals",
   };
@@ -119,21 +119,12 @@ export const ConditionNode: React.FC<CustomNodeProps> = ({ data, selected }) => 
         <p className="text-[11px] text-gray-600">{info}</p>
       </div>
 
-      {/* Yes / No handles */}
       <div className="flex justify-between px-6 pb-2 text-[10px] font-semibold">
         <span className="text-green-600">Yes</span>
         <span className="text-red-500">No</span>
       </div>
-      <Handle
-        type="source" position={Position.Bottom} id="yes"
-        style={{ left: "30%" }}
-        className="!w-3 !h-3 !bg-green-500 !border-2 !border-white"
-      />
-      <Handle
-        type="source" position={Position.Bottom} id="no"
-        style={{ left: "70%" }}
-        className="!w-3 !h-3 !bg-red-400 !border-2 !border-white"
-      />
+      <Handle type="source" position={Position.Bottom} id="yes" style={{ left: "30%" }} className="!w-3 !h-3 !bg-green-500 !border-2 !border-white" />
+      <Handle type="source" position={Position.Bottom} id="no"  style={{ left: "70%" }} className="!w-3 !h-3 !bg-red-400 !border-2 !border-white" />
     </div>
   );
 };
@@ -215,6 +206,83 @@ export const TagNode: React.FC<CustomNodeProps> = ({ data, selected }) => (
     selected={selected}
   />
 );
+
+// ── BUTTON ROUTER ─────────────────────────────────────────────────────────────
+// Fixed height node — handles are absolutely positioned on the container
+// so they never overlap regardless of button count (works for 2–10 buttons)
+const HEADER_H = 56;  // header section px
+const ROW_H    = 34;  // each button row px
+const BOTTOM_P = 12;  // bottom padding px
+
+export const ButtonRouterNode: React.FC<CustomNodeProps> = ({ data, selected }) => {
+  const buttons: string[] = Array.isArray(data.templateButtons)
+    ? (data.templateButtons as unknown as string[])
+    : [];
+
+  const nodeH = HEADER_H + buttons.length * ROW_H + BOTTOM_P;
+
+  return (
+    <div
+      className={`relative rounded-xl border-2 bg-white shadow-sm border-indigo-300
+        ${selected ? "shadow-lg ring-2 ring-blue-400 ring-offset-1" : "hover:shadow-md"}`}
+      style={{ width: 240, height: nodeH }}
+    >
+      {/* top target handle */}
+      <Handle type="target" position={Position.Top} className="!w-3 !h-3 !bg-gray-400 !border-2 !border-white" />
+
+      {/* header */}
+      <div className="flex items-center gap-2.5 px-3 pt-3 pb-2">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-100">
+          <GitBranch size={15} className="text-indigo-600" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-bold text-gray-800">Button Router</p>
+          <p className="text-[10px] text-gray-400 truncate">
+            {data.templateName ? `Template: ${data.templateName}` : "Route by button reply"}
+          </p>
+        </div>
+      </div>
+
+      {buttons.length > 0 ? (
+        <div className="px-3 space-y-0.5">
+          {buttons.map((btn, i) => {
+            // center of this row relative to total node height → used for handle top
+            const rowCenterPx = HEADER_H + i * ROW_H + ROW_H / 2;
+            const topPct = (rowCenterPx / nodeH) * 100;
+
+            return (
+              <div
+                key={`${btn}-${i}`}
+                className="flex items-center rounded-lg bg-indigo-50 border border-indigo-100 px-2.5"
+                style={{ height: ROW_H - 4 }}
+              >
+                <span className="text-[11px] text-indigo-700 font-medium truncate">{btn}</span>
+
+                {/* handle is on the outer container, not inside this div */}
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id={`btn-${i}`}
+                  style={{
+                    position: "absolute",
+                    right: -6,
+                    top: `${topPct}%`,
+                    transform: "translateY(-50%)",
+                  }}
+                  className="!w-3 !h-3 !bg-indigo-500 !border-2 !border-white"
+                />
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="mx-3 rounded-lg bg-gray-50 border border-gray-100 px-2.5 py-2">
+          <p className="text-[11px] text-gray-400">Select a template in properties</p>
+        </div>
+      )}
+    </div>
+  );
+};
 
 // ── END ───────────────────────────────────────────────────────────────────────
 export const EndNode: React.FC<CustomNodeProps> = ({ data, selected }) => (

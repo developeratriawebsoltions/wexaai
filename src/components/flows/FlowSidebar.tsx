@@ -44,7 +44,8 @@ const SECTIONS: { label: string; color: string; nodes: SidebarNode[] }[] = [
     label: "LOGIC",
     color: "text-yellow-500",
     nodes: [
-      { id: "condition", label: "Condition", icon: GitBranch, bg: "bg-purple-100", color: "text-purple-600" },
+      { id: "condition",    label: "Condition",      icon: GitBranch, bg: "bg-purple-100", color: "text-purple-600" },
+      { id: "buttonRouter", label: "Button Router",  icon: GitBranch, bg: "bg-indigo-100", color: "text-indigo-600" },
     ],
   },
   {

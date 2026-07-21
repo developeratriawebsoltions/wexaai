@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Search, Plus, Edit2, Trash2, MoreVertical, Zap, GitBranch, Sparkles, Send, Users, Webhook, Clock, Mail, Tag, CheckCircle2 } from "lucide-react";
 import FlowCanvasBuilder from "@/components/flows/FlowCanvas";
 import { Node, Edge } from "reactflow";
@@ -57,16 +57,53 @@ export default function FlowsPage() {
 
   useEffect(() => { fetchFlows(); }, []);
 
-  const saveFlow = async (name: string, nodes: Node[], edges: Edge[]) => {
+  const canvasRef = useRef(canvas);
+  canvasRef.current = canvas;
+
+  const saveFlow = async (
+    name: string,
+    nodes: Node[],
+    edges: Edge[],
+    closeAfter = true,
+    status?: "active" | "draft"
+  ) => {
     try {
-      const isEdit = !!canvas.flow;
-      const url = isEdit ? `/api/flows/${canvas.flow!.id}` : "/api/flows";
+      const currentFlow = canvasRef.current.flow;
+      const isEdit = !!currentFlow?.id;
+      const url = isEdit ? `/api/flows/${currentFlow!.id}` : "/api/flows";
       const method = isEdit ? "PATCH" : "POST";
+
+      let cleanNodes = nodes.map((n) => ({
+        id: n.id,
+        type: n.type,
+        position: n.position,
+        data: n.data,
+      }));
+      const nodeIds = cleanNodes.map((n) => n.id);
+      const duplicateNodeIds = nodeIds.filter((id, index) => nodeIds.indexOf(id) !== index);
+      if (duplicateNodeIds.length > 0) {
+        const uniqueDuplicates = [...new Set(duplicateNodeIds)].join(", ");
+        console.warn("Duplicate node IDs found; removing duplicate nodes before save:", uniqueDuplicates);
+        const seen = new Set<string>();
+        cleanNodes = cleanNodes.filter((node) => {
+          if (seen.has(node.id)) return false;
+          seen.add(node.id);
+          return true;
+        });
+      }
+
+      const cleanEdges = edges.map((e) => ({
+        source: e.source,
+        target: e.target,
+        sourceHandle: e.sourceHandle ?? null,
+      }));
+
+      const statusPayload = status ?? (isEdit ? currentFlow?.status ?? "draft" : "draft");
       const res = await fetch(url, {
         method,
         credentials: "include",
         headers: authHeaders(),
-        body: JSON.stringify({ name, nodes, edges, status: "draft" }),
+        body: JSON.stringify({ name, nodes: cleanNodes, edges: cleanEdges, status: statusPayload }),
       });
       if (res.ok) {
         const saved = await res.json();
@@ -75,8 +112,12 @@ export default function FlowsPage() {
         } else {
           setFlows((prev) => [saved, ...prev]);
         }
-        setCanvas({ open: false, flow: null });
-      } else console.error("Save failed:", await res.text());
+        setCanvas((prev) => ({ ...prev, flow: saved }));
+        if (closeAfter) setCanvas({ open: false, flow: null });
+      } else {
+        const errText = await res.text();
+        console.error("Save failed:", res.status, res.statusText, errText);
+      }
     } catch (error) {
       console.error("Error saving flow:", error);
     }
@@ -118,6 +159,7 @@ export default function FlowsPage() {
         initialNodes={canvas.flow?.nodes || []}
         initialEdges={canvas.flow?.edges || []}
         flowName={canvas.flow?.name || "New Flow"}
+        flowStatus={canvas.flow?.status ?? "draft"}
         onSave={saveFlow}
         onClose={() => setCanvas({ open: false, flow: null })}
       />

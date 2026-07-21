@@ -108,7 +108,7 @@ model Message {
   workspaceId    String
   from           String
   text           String
-  waMessageId    String?
+  waMessageId    String?      @unique
   status         String       @default("received")
   createdAt      DateTime     @default(now())
   conversationId String
@@ -184,11 +184,12 @@ model FlowNode {
 }
 
 model FlowEdge {
-  id     String @id @default(cuid())
-  flowId String
-  source String
-  target String
-  flow   Flow   @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  id           String  @id @default(cuid())
+  flowId       String
+  source       String
+  target       String
+  sourceHandle String?
+  flow         Flow    @relation(fields: [flowId], references: [id], onDelete: Cascade)
 }
 
 model Plan {

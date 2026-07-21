@@ -19,7 +19,7 @@ import {
 import "reactflow/dist/style.css";
 import {
   TriggerNode, ConditionNode, ActionNode, MessageNode,
-  AIReplyNode, WaitNode, TemplateNode, AssignNode, TagNode, EndNode,
+  AIReplyNode, WaitNode, TemplateNode, AssignNode, TagNode, EndNode, ButtonRouterNode,
 } from "./nodes";
 import FlowSidebar from "./FlowSidebar";
 import FlowTopbar from "./FlowTopbar";
@@ -30,7 +30,8 @@ interface FlowCanvasProps {
   initialNodes?: Node[];
   initialEdges?: Edge[];
   flowName?: string;
-  onSave?: (name: string, nodes: Node[], edges: Edge[]) => void;
+  flowStatus?: "active" | "draft";
+  onSave?: (name: string, nodes: Node[], edges: Edge[], closeAfter?: boolean, status?: "active" | "draft") => void;
   onClose?: () => void;
 }
 
@@ -45,25 +46,27 @@ const NODE_TYPES: NodeTypes = {
   assign: AssignNode,
   tag: TagNode,
   end: EndNode,
+  buttonRouter: ButtonRouterNode,
 };
 
-// ── inner component has access to useReactFlow ────────────────────────────────
-function FlowInner({
-  initialNodes, initialEdges, flowName = "New Flow", onSave, onClose,
-}: FlowCanvasProps) {
+function FlowInner({ initialNodes, initialEdges, flowName = "New Flow", flowStatus = "draft", onSave, onClose }: FlowCanvasProps) {
   const [name, setName] = useState(flowName);
-  const [isActive, setIsActive] = useState(false);
+  const [isActive, setIsActive] = useState(flowStatus === "active");
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes ?? []);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges ?? []);
-  const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [zoom, setZoom] = useState(100);
 
-  // undo/redo history
+  // Store only the selected node ID — derive live node from nodes array
+  // This fixes the stale closure bug where typing in PropertiesPanel
+  // would not update because selectedNode held an old snapshot
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const selectedNode = nodes.find((n) => n.id === selectedNodeId) ?? null;
+
   const history = useRef<{ nodes: Node[]; edges: Edge[] }[]>([]);
   const future  = useRef<{ nodes: Node[]; edges: Edge[] }[]>([]);
 
-  const { zoomIn, zoomOut, fitView, getZoom, setViewport, getViewport } = useReactFlow();
+  const { zoomIn, zoomOut, fitView, getZoom } = useReactFlow();
 
   const pushHistory = useCallback((n: Node[], e: Edge[]) => {
     history.current.push({ nodes: n, edges: e });
@@ -86,37 +89,38 @@ function FlowInner({
     setEdges(next.edges);
   };
 
-  const handleZoomIn = () => {
-    zoomIn({ duration: 200 });
-    setTimeout(() => setZoom(Math.round(getZoom() * 100)), 220);
-  };
+  const handleZoomIn  = () => { zoomIn({ duration: 200 });  setTimeout(() => setZoom(Math.round(getZoom() * 100)), 220); };
+  const handleZoomOut = () => { zoomOut({ duration: 200 }); setTimeout(() => setZoom(Math.round(getZoom() * 100)), 220); };
+  const handleFitView = () => { fitView({ duration: 300, padding: 0.1 }); setTimeout(() => setZoom(Math.round(getZoom() * 100)), 320); };
 
-  const handleZoomOut = () => {
-    zoomOut({ duration: 200 });
-    setTimeout(() => setZoom(Math.round(getZoom() * 100)), 220);
-  };
-
-  const handleFitView = () => {
-    fitView({ duration: 300, padding: 0.1 });
-    setTimeout(() => setZoom(Math.round(getZoom() * 100)), 320);
-  };
+  const nodesRef = useRef(nodes);
+  nodesRef.current = nodes;
 
   const onConnect = useCallback(
     (connection: Connection) => {
-      pushHistory(nodes, edges);
-      setEdges((eds) => addEdge(connection, eds));
+      pushHistory(nodesRef.current, edges);
+      setEdges((eds) => {
+        const newEdges = addEdge(connection, eds);
+        // Use nodesRef.current to avoid stale closure
+        onSave?.(name, nodesRef.current, newEdges, false, isActive ? "active" : "draft");
+        setLastSaved(new Date());
+        return newEdges;
+      });
     },
-    [nodes, edges, pushHistory, setEdges]
+    [edges, pushHistory, setEdges, onSave, name, isActive]
   );
 
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
-    setSelectedNode(node);
+    setSelectedNodeId(node.id);
   }, []);
 
   const addNode = (type: string) => {
     pushHistory(nodes, edges);
     const newNode: Node = {
-      id: `node-${Date.now()}`,
+      id:
+        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `node-${Date.now()}-${Math.floor(Math.random() * 1e9)}`,
       type,
       position: { x: 300 + Math.random() * 200, y: 200 + Math.random() * 200 },
       data: { label: type.charAt(0).toUpperCase() + type.slice(1) },
@@ -134,7 +138,7 @@ function FlowInner({
     pushHistory(nodes, edges);
     setNodes((nds) => nds.filter((n) => n.id !== nodeId));
     setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
-    setSelectedNode(null);
+    setSelectedNodeId(null);
   };
 
   const getLastSavedText = () => {
@@ -150,7 +154,7 @@ function FlowInner({
       <FlowTopbar
         name={name}
         onNameChange={setName}
-        onSave={() => { onSave?.(name, nodes, edges); setLastSaved(new Date()); }}
+        onSave={() => { onSave?.(name, nodes, edges, true, isActive ? "active" : "draft"); setLastSaved(new Date()); }}
         onClose={onClose}
         isActive={isActive}
         onToggleActive={() => setIsActive((v) => !v)}
@@ -174,57 +178,27 @@ function FlowInner({
             </div>
 
             <div className="flex items-center gap-1">
-              {/* Undo */}
-              <button
-                onClick={undo}
-                disabled={history.current.length === 0}
-                className="p-1.5 hover:bg-gray-100 rounded text-gray-400 disabled:opacity-30 disabled:cursor-not-allowed"
-                title="Undo"
-              >
+              <button onClick={undo} disabled={history.current.length === 0} className="p-1.5 hover:bg-gray-100 rounded text-gray-400 disabled:opacity-30 disabled:cursor-not-allowed" title="Undo">
                 <Undo2 size={15} />
               </button>
-
-              {/* Redo */}
-              <button
-                onClick={redo}
-                disabled={future.current.length === 0}
-                className="p-1.5 hover:bg-gray-100 rounded text-gray-400 disabled:opacity-30 disabled:cursor-not-allowed"
-                title="Redo"
-              >
+              <button onClick={redo} disabled={future.current.length === 0} className="p-1.5 hover:bg-gray-100 rounded text-gray-400 disabled:opacity-30 disabled:cursor-not-allowed" title="Redo">
                 <Redo2 size={15} />
               </button>
-
-              {/* Zoom controls */}
               <div className="flex items-center gap-1 mx-2 px-2 py-1 border border-gray-200 rounded-lg text-xs text-gray-600">
-                <button onClick={handleZoomOut} className="hover:text-gray-800 p-0.5" title="Zoom out">
-                  <ZoomOut size={13} />
-                </button>
+                <button onClick={handleZoomOut} className="hover:text-gray-800 p-0.5" title="Zoom out"><ZoomOut size={13} /></button>
                 <span className="w-10 text-center font-medium">{zoom}%</span>
-                <button onClick={handleZoomIn} className="hover:text-gray-800 p-0.5" title="Zoom in">
-                  <ZoomIn size={13} />
-                </button>
+                <button onClick={handleZoomIn} className="hover:text-gray-800 p-0.5" title="Zoom in"><ZoomIn size={13} /></button>
               </div>
-
-              {/* Fit view */}
-              <button
-                onClick={handleFitView}
-                className="p-1.5 hover:bg-gray-100 rounded text-gray-400"
-                title="Fit view"
-              >
+              <button onClick={handleFitView} className="p-1.5 hover:bg-gray-100 rounded text-gray-400" title="Fit view">
                 <Maximize2 size={15} />
               </button>
-
-              {/* Add Node */}
-              <button
-                onClick={() => addNode("trigger")}
-                className="flex items-center gap-1.5 ml-2 px-3 py-1.5 rounded-lg bg-green-600 text-white text-xs font-semibold hover:bg-green-700"
-              >
+              <button onClick={() => addNode("trigger")} className="flex items-center gap-1.5 ml-2 px-3 py-1.5 rounded-lg bg-green-600 text-white text-xs font-semibold hover:bg-green-700">
                 <Plus size={13} /> Add Node
               </button>
             </div>
           </div>
 
-          {/* React Flow */}
+          {/* React Flow canvas */}
           <div className="flex-1 relative" style={{ height: "100%", width: "100%" }}>
             <ReactFlow
               nodes={nodes}
@@ -233,17 +207,13 @@ function FlowInner({
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
               onNodeClick={onNodeClick}
-              onPaneClick={() => setSelectedNode(null)}
+              onPaneClick={() => setSelectedNodeId(null)}
               onMoveEnd={() => setZoom(Math.round(getZoom() * 100))}
               nodeTypes={NODE_TYPES}
               fitView
             >
               <Background variant={BackgroundVariant.Dots} color="#6366f1" gap={24} size={2} style={{ backgroundColor: "#ffffff" }} />
-              <MiniMap
-                className="!bottom-4 !right-4"
-                nodeColor="#e5e7eb"
-                maskColor="rgba(255,255,255,0.7)"
-              />
+              <MiniMap className="!bottom-4 !right-4" nodeColor="#e5e7eb" maskColor="rgba(255,255,255,0.7)" />
             </ReactFlow>
           </div>
         </div>
@@ -251,9 +221,11 @@ function FlowInner({
         {selectedNode && (
           <PropertiesPanel
             node={selectedNode}
+            allNodes={nodes}
+            allEdges={edges}
             onUpdate={(data) => updateNodeData(selectedNode.id, data)}
             onDelete={() => deleteNode(selectedNode.id)}
-            onClose={() => setSelectedNode(null)}
+            onClose={() => setSelectedNodeId(null)}
           />
         )}
       </div>
@@ -261,7 +233,6 @@ function FlowInner({
   );
 }
 
-// ── wrap with ReactFlowProvider so useReactFlow works ─────────────────────────
 export default function FlowCanvas(props: FlowCanvasProps) {
   return (
     <ReactFlowProvider>
