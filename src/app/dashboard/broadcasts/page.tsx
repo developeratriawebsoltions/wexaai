@@ -30,6 +30,13 @@ type Template = {
   status: string;
 };
 
+type Contact = {
+  id: string;
+  name: string;
+  phone: string;
+  email: string | null;
+};
+
 const STATUS_STYLE: Record<string, string> = {
   completed: "bg-green-100 text-green-700",
   sending:   "bg-blue-100 text-blue-700",
@@ -57,6 +64,10 @@ export default function BroadcastsPage() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [audience, setAudience] = useState("all");
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [contactSearch, setContactSearch] = useState("");
+  const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
+  const [contactsLoading, setContactsLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [wizardError, setWizardError] = useState("");
 
@@ -84,13 +95,36 @@ export default function BroadcastsPage() {
     } catch { setTemplates([]); }
   };
 
+  const fetchContacts = async (query = "") => {
+    if (!token) return;
+    setContactsLoading(true);
+    try {
+      const res = await fetch(`/api/contacts?search=${encodeURIComponent(query)}&limit=20`, { credentials: "include" });
+      const data = await res.json();
+      setContacts(Array.isArray(data.contacts) ? data.contacts : []);
+    } catch {
+      setContacts([]);
+    } finally {
+      setContactsLoading(false);
+    }
+  };
+
   useEffect(() => { fetchBroadcasts(); }, []);
+
+  useEffect(() => {
+    if (showWizard && step === 2) {
+      fetchContacts(contactSearch);
+    }
+  }, [showWizard, step, contactSearch]);
 
   const openWizard = () => {
     setStep(0);
     setCampaignName("");
     setSelectedTemplate(null);
     setAudience("all");
+    setContactSearch("");
+    setSelectedContactIds([]);
+    setContacts([]);
     setWizardError("");
     setShowWizard(true);
     fetchTemplates();
@@ -100,6 +134,10 @@ export default function BroadcastsPage() {
     setWizardError("");
     if (step === 0 && !campaignName.trim()) { setWizardError("Campaign name is required."); return; }
     if (step === 1 && !selectedTemplate) { setWizardError("Please select a template."); return; }
+    if (step === 2 && audience === "selected" && selectedContactIds.length === 0) {
+      setWizardError("Select at least one contact or choose All Contacts.");
+      return;
+    }
     setStep((s) => s + 1);
   };
 
@@ -111,7 +149,12 @@ export default function BroadcastsPage() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ campaignName, templateName: selectedTemplate!.name, audience }),
+        body: JSON.stringify({
+          campaignName,
+          templateName: selectedTemplate!.name,
+          audience,
+          contactIds: audience === "selected" ? selectedContactIds : undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) { setWizardError(data.error ?? "Failed to send."); setSending(false); return; }
@@ -330,10 +373,16 @@ export default function BroadcastsPage() {
                   <div className="space-y-2">
                     {[
                       { value: "all", label: "All Contacts", desc: "Send to every contact in your workspace" },
+                      { value: "selected", label: "Select Contacts", desc: "Search and choose individual contacts by number" },
                     ].map((opt) => (
                       <button
                         key={opt.value}
-                        onClick={() => setAudience(opt.value)}
+                        onClick={() => {
+                          setAudience(opt.value);
+                          if (opt.value === "all") {
+                            setSelectedContactIds([]);
+                          }
+                        }}
                         className={`w-full rounded-xl border px-4 py-3 text-left transition ${
                           audience === opt.value
                             ? "border-green-500 bg-green-50"
@@ -345,6 +394,62 @@ export default function BroadcastsPage() {
                       </button>
                     ))}
                   </div>
+
+                  {audience === "selected" && (
+                    <div className="mt-4 space-y-3">
+                      <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
+                        <Search size={14} className="text-gray-400" />
+                        <input
+                          value={contactSearch}
+                          onChange={(e) => setContactSearch(e.target.value)}
+                          placeholder="Search contacts by name, phone, or email"
+                          className="w-full bg-transparent text-sm text-gray-700 outline-none placeholder:text-gray-400"
+                        />
+                      </div>
+
+                      <div className="rounded-xl border border-gray-200 bg-white max-h-60 overflow-y-auto">
+                        {contactsLoading ? (
+                          <div className="flex items-center justify-center p-4 text-sm text-gray-500">Loading contacts…</div>
+                        ) : contacts.length === 0 ? (
+                          <div className="p-4 text-sm text-gray-500">No contacts found. Try searching by number or name.</div>
+                        ) : (
+                          <div className="space-y-1 p-2">
+                            {contacts.map((contact) => {
+                              const selected = selectedContactIds.includes(contact.id);
+                              return (
+                                <button
+                                  key={contact.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setAudience("selected");
+                                    setSelectedContactIds((prev) =>
+                                      prev.includes(contact.id)
+                                        ? prev.filter((id) => id !== contact.id)
+                                        : [...prev, contact.id]
+                                    );
+                                  }}
+                                  className={`flex w-full items-center justify-between rounded-xl px-3 py-3 text-left transition ${
+                                    selected ? "border border-green-500 bg-green-50" : "border border-transparent hover:border-gray-200"
+                                  }`}
+                                >
+                                  <div>
+                                    <p className="text-xs font-semibold text-gray-800">{contact.name || contact.phone}</p>
+                                    <p className="mt-0.5 text-[11px] text-gray-400">{contact.phone}</p>
+                                  </div>
+                                  <div className={`h-4 w-4 rounded-full border ${selected ? "border-green-600 bg-green-600" : "border-gray-300"}`} />
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      {selectedContactIds.length > 0 && (
+                        <p className="text-xs text-gray-500">{selectedContactIds.length} contact{selectedContactIds.length === 1 ? "" : "s"} selected.</p>
+                      )}
+                    </div>
+                  )}
+
                   <p className="mt-3 text-[11px] text-gray-400">More audience filters (tags, segments) coming soon.</p>
                 </div>
               )}

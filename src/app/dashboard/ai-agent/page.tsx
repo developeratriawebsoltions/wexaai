@@ -31,7 +31,8 @@ export default function AIAgentPage() {
   const [kbAdding, setKbAdding] = useState(false);
 
   // Overview stats
-  const [overviewStats, setOverviewStats] = useState<{ needsAttention: number; knowledgeCount: number } | null>(null);
+  const [overviewStats, setOverviewStats] = useState<{ needsAttention: number; knowledgeCount: number; messagesSent: number; conversationsCount: number; messagesSentChange: string } | null>(null);
+  const [conversationLogs, setConversationLogs] = useState<Array<{ id: string; contactPhone: string; contactName: string | null; lastMessage: string; lastMessageAt: string; unreadCount: number; status: string; assignedTo: string | null }>>([]);
 
   useEffect(() => {
     authFetch("/api/ai-agent")
@@ -44,7 +45,36 @@ export default function AIAgentPage() {
       .then((d) => Array.isArray(d) && setKnowledge(d));
     authFetch("/api/overview")
       .then((r) => r.json())
-      .then((d) => d.aiAgent && setOverviewStats({ needsAttention: d.aiAgent.needsAttention, knowledgeCount: d.aiAgent.knowledgeCount }));
+      .then((d) => d.aiAgent && setOverviewStats({ needsAttention: d.aiAgent.needsAttention, knowledgeCount: d.aiAgent.knowledgeCount, messagesSent: d.stats?.totalOutboundMessages ?? 0, conversationsCount: d.stats?.totalConversations ?? 0, messagesSentChange: d.stats?.outboundMsgChange ?? "0%" }));
+
+    async function loadConversationLogs() {
+      const res = await authFetch("/api/conversations?limit=50");
+      const data = await res.json();
+      const conversations = Array.isArray(data.conversations) ? data.conversations : [];
+
+      const filtered = await Promise.all(
+        conversations.map(async (conversation: { id: string; contactPhone: string; contactName: string | null; lastMessage: string; lastMessageAt: string; unreadCount: number; status: string; assignedTo: string | null }) => {
+          const msgRes = await authFetch(`/api/messages?conversationId=${conversation.id}`);
+          const messages = await msgRes.json();
+          const aiReplies = Array.isArray(messages)
+            ? messages.filter((msg: { direction?: string; from?: string }) => msg.direction === "outbound" && msg.from === "AI")
+            : [];
+
+          if (aiReplies.length === 0) return null;
+
+          const latestReply = aiReplies[aiReplies.length - 1];
+          return {
+            ...conversation,
+            lastMessage: latestReply.text || conversation.lastMessage,
+            lastMessageAt: latestReply.createdAt || conversation.lastMessageAt,
+          };
+        })
+      );
+
+      setConversationLogs(filtered.filter(Boolean) as Array<{ id: string; contactPhone: string; contactName: string | null; lastMessage: string; lastMessageAt: string; unreadCount: number; status: string; assignedTo: string | null }>);
+    }
+
+    loadConversationLogs();
   }, []);
 
   async function saveSettings() {
@@ -142,15 +172,17 @@ export default function AIAgentPage() {
 
               <div className="rounded-xl border border-gray-200 bg-white p-5">
                 <p className="mb-4 text-sm font-semibold text-gray-800">Live Stats</p>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 gap-3">
                   {[
                     { label: "Knowledge Entries", value: overviewStats ? String(overviewStats.knowledgeCount) : "—" },
                     { label: "Needs Attention", value: overviewStats ? String(overviewStats.needsAttention) : "—" },
-                    { label: "KB in Memory", value: knowledge.length > 0 ? String(knowledge.length) : "0" },
+                    { label: "Messages Sent", value: overviewStats ? String(overviewStats.messagesSent) : "—", hint: overviewStats?.messagesSentChange },
+                    { label: "Conversations", value: overviewStats ? String(overviewStats.conversationsCount) : "—" },
                   ].map((m) => (
-                    <div key={m.label}>
+                    <div key={m.label} className="rounded-lg bg-gray-50 p-3">
                       <p className="text-[10px] text-gray-400 leading-tight">{m.label}</p>
                       <p className="mt-1 text-2xl font-bold text-gray-900">{m.value}</p>
+                      {m.hint ? <p className="mt-1 text-[10px] font-medium text-green-600">{m.hint}</p> : null}
                     </div>
                   ))}
                 </div>
@@ -360,8 +392,38 @@ export default function AIAgentPage() {
 
         {/* Conversation Logs Tab */}
         {activeTab === 3 && (
-          <div className="rounded-xl border border-gray-200 bg-white p-8 text-center">
-            <p className="text-sm text-gray-400">Conversation logs coming soon.</p>
+          <div className="rounded-xl border border-gray-200 bg-white p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-sm font-semibold text-gray-800">AI Reply Conversation Logs</p>
+              <span className="text-xs text-gray-500">Showing {conversationLogs.length} AI-replied conversations</span>
+            </div>
+
+            {conversationLogs.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-gray-200 p-8 text-center">
+                <p className="text-sm text-gray-400">No conversation activity yet.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {conversationLogs.map((log) => (
+                  <div key={log.id} className="rounded-lg border border-gray-100 p-3 hover:bg-gray-50">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-800">{log.contactName || log.contactPhone}</p>
+                        <p className="text-xs text-gray-500">{log.contactPhone}</p>
+                      </div>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${log.status === "needs_attention" ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>
+                        {log.status.replace(/_/g, " ")}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm text-gray-600">{log.lastMessage || "No message yet"}</p>
+                    <div className="mt-2 flex items-center justify-between text-[11px] text-gray-400">
+                      <span>{log.lastMessageAt ? new Date(log.lastMessageAt).toLocaleString() : "—"}</span>
+                      <span>Unread: {log.unreadCount} · Assigned: {log.assignedTo ? log.assignedTo : "Unassigned"}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

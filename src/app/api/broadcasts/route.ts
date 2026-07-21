@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   const workspaceId = await getWorkspaceId(user.id);
   if (!workspaceId) return NextResponse.json({ error: "No workspace" }, { status: 404 });
 
-  const { campaignName, templateName, audience } = await req.json();
+  const { campaignName, templateName, audience, contactIds } = await req.json();
   if (!campaignName || !templateName) {
     return NextResponse.json({ error: "campaignName and templateName are required" }, { status: 400 });
   }
@@ -36,8 +36,12 @@ export async function POST(req: NextRequest) {
   if (!wa) return NextResponse.json({ error: "WhatsApp not connected" }, { status: 400 });
 
   // Get contacts
+  const contactFilter = contactIds && Array.isArray(contactIds) && contactIds.length > 0
+    ? { id: { in: contactIds }, workspaceId }
+    : { workspaceId };
+
   const contacts = await prisma.contact.findMany({
-    where: { workspaceId },
+    where: contactFilter,
     select: { id: true, phone: true },
   });
 
