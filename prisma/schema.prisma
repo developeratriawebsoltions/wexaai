@@ -270,6 +270,7 @@ model Template {
   language       String    @default("en")
   header         String?
   headerType     String?
+  headerHandle   String?
   body           String
   footer         String?
   buttons        Json?

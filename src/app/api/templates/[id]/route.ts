@@ -28,19 +28,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!wa || wa.status !== "active") return NextResponse.json({ error: "WhatsApp not connected" }, { status: 400 });
   if (template.status !== "APPROVED") return NextResponse.json({ error: "Template is not approved" }, { status: 400 });
 
+  console.log("[Template Send] template.headerType:", template.headerType);
+  console.log("[Template Send] template.header:", template.header);
+
   // Build components with variable substitution
   type MetaParam = { type: string; text?: string; image?: { link: string }; video?: { link: string }; document?: { link: string } };
   const components: { type: string; parameters?: MetaParam[] }[] = [];
 
-  // IMAGE/VIDEO/DOCUMENT header — must send header component with media link
-  if (template.headerType && template.headerType !== "TEXT" && template.header) {
+  // IMAGE/VIDEO/DOCUMENT header — use headerHandle (Meta internal id)
+  if (template.headerType && template.headerType !== "TEXT" && template.headerHandle) {
     const mediaType = template.headerType.toLowerCase() as "image" | "video" | "document";
     components.push({
       type: "header",
-      parameters: [{ type: mediaType, [mediaType]: { link: template.header } }],
+      parameters: [{ type: mediaType, [mediaType]: { id: template.headerHandle } }],
     });
   }
 
+  // Only add body variables if present
+  // Note: Do NOT send header component for IMAGE templates —
+  // Meta uses the registered image automatically
   if (variables?.body?.length) {
     components.push({
       type: "body",
@@ -48,25 +54,30 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     });
   }
 
+  const metaPayload = {
+    messaging_product: "whatsapp",
+    to: contact.phone.replace(/^\+/, ""),
+    type: "template",
+    template: {
+      name: template.name,
+      language: { code: template.language },
+      ...(components.length ? { components } : {}),
+    },
+  };
+
+  console.log("[Template Send] payload:", JSON.stringify(metaPayload, null, 2));
+
   const metaRes = await fetch(
     `https://graph.facebook.com/v19.0/${wa.phoneNumberId}/messages`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${wa.accessToken}` },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        to: contact.phone,
-        type: "template",
-        template: {
-          name: template.name,
-          language: { code: template.language },
-          ...(components.length ? { components } : {}),
-        },
-      }),
+      body: JSON.stringify(metaPayload),
     }
   );
 
   const metaData = await metaRes.json();
+  console.log("[Template Send] meta response:", JSON.stringify(metaData, null, 2));
   if (!metaRes.ok) return NextResponse.json({ error: metaData.error?.message ?? "Meta API error" }, { status: 502 });
 
   // Upsert conversation & save message
