@@ -33,8 +33,10 @@ export function useAuth() {
       })
       .then((d) => {
         if (!d) return;
-        setUser(d.user);
-        setWorkspace(d.workspace);
+        const userData = d.user ? d.user : { id: d.id, name: d.name, email: d.email };
+        const workspaceData = d.workspace ? d.workspace : Array.isArray(d.workspaces) && d.workspaces.length > 0 ? d.workspaces[0] : null;
+        setUser(userData);
+        setWorkspace(workspaceData);
         setLoading(false);
       })
       .catch(() => router.replace("/login"));
