@@ -46,7 +46,7 @@ async function sendTemplateMessage(
   templateName: string,
   language: string
 ) {
-  const langCode = language.includes("_") ? language : language === "en" ? "en_US" : language;
+  const langCode = language;
   const res = await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
