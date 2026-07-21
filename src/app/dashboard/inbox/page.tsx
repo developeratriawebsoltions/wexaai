@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Search, Send, CheckCheck, Check, Clock, RefreshCw,
   MessageSquare, Phone, MoreVertical, Filter, Inbox,
-  ChevronDown, Circle,
+  ChevronDown, Circle, Smile, Paperclip, ArrowLeft,
 } from "lucide-react";
 
 function authFetch(url: string, options: RequestInit = {}) {
@@ -38,6 +38,16 @@ interface Message {
   status: string;
   createdAt: string;
   from: string;
+}
+
+function dateSeparator(iso: string) {
+  const d = new Date(iso);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (d.toDateString() === today.toDateString()) return "Today";
+  if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return d.toLocaleDateString([], { day: "numeric", month: "long", year: "numeric" });
 }
 
 function timeAgo(iso: string) {
@@ -79,7 +89,9 @@ export default function InboxPage() {
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<ConvStatus | "all">("all");
+  const [filterOpen, setFilterOpen] = useState(false);
   const [sendError, setSendError] = useState("");
+  const [mobileView, setMobileView] = useState<"list" | "chat">("list");
   const bottomRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -122,6 +134,7 @@ export default function InboxPage() {
     setActiveId(conv.id);
     setMessages([]);
     setSendError("");
+    setMobileView("chat");
     fetchMessages(conv.id);
   };
 
@@ -210,24 +223,60 @@ export default function InboxPage() {
     return colors[phone.charCodeAt(phone.length - 1) % colors.length];
   };
 
+  // Group messages by date for separators
+  const groupedMessages = messages.reduce<{ date: string; msgs: Message[] }[]>((acc, msg) => {
+    const label = dateSeparator(msg.createdAt);
+    const last = acc[acc.length - 1];
+    if (last && last.date === label) { last.msgs.push(msg); }
+    else acc.push({ date: label, msgs: [msg] });
+    return acc;
+  }, []);
+
   return (
     <div className="flex h-full overflow-hidden bg-[#f0f2f5]">
       {/* Left Panel — Conversation List */}
-      <div className="flex w-[340px] flex-shrink-0 flex-col border-r border-gray-200 bg-white">
+      <div className={`flex w-full md:w-[340px] flex-shrink-0 flex-col border-r border-gray-200 bg-white ${
+        mobileView === "chat" ? "hidden md:flex" : "flex"
+      }`}>
         {/* Header */}
         <div className="border-b border-gray-100 px-4 py-4">
-          <div className="flex items-center justify-between">
+          <div className="relative flex items-center justify-between">
             <h1 className="text-lg font-bold text-gray-900">Inbox</h1>
-            <div className="flex items-center gap-1">
+            <div className="relative flex items-center gap-1">
               <button
                 onClick={fetchConversations}
                 className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
               >
                 <RefreshCw size={15} />
               </button>
-              <button className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+              <button
+                onClick={() => setFilterOpen((open) => !open)}
+                className={`rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 ${filterOpen ? "bg-gray-100 text-gray-700" : ""}`}
+              >
                 <Filter size={15} />
               </button>
+              {filterOpen && (
+                <div className="absolute right-0 top-full z-10 mt-2 w-44 rounded-2xl border border-gray-200 bg-white p-2 shadow-lg">
+                  <div className="space-y-1">
+                    {STATUS_TABS.map((tab) => (
+                      <button
+                        key={tab.value}
+                        onClick={() => {
+                          setStatusFilter(tab.value);
+                          setFilterOpen(false);
+                        }}
+                        className={`w-full rounded-xl px-3 py-2 text-left text-sm font-medium transition-colors ${
+                          statusFilter === tab.value
+                            ? "bg-green-50 text-green-700"
+                            : "text-gray-600 hover:bg-gray-100"
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -321,10 +370,18 @@ export default function InboxPage() {
 
       {/* Right Panel — Chat View */}
       {activeId && activeConv ? (
-        <div className="flex flex-1 flex-col overflow-hidden">
+        <div className={`flex flex-1 flex-col overflow-hidden ${
+          mobileView === "list" ? "hidden md:flex" : "flex"
+        }`}>
           {/* Chat Header */}
-          <div className="flex items-center justify-between border-b border-gray-200 bg-white px-5 py-3.5">
+          <div className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
             <div className="flex items-center gap-3">
+              <button
+                onClick={() => setMobileView("list")}
+                className="md:hidden mr-1 text-gray-500 hover:text-gray-700"
+              >
+                <ArrowLeft size={20} />
+              </button>
               <div className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white ${avatarColor(activeConv.contactPhone)}`}>
                 {initials(activeConv)}
               </div>
@@ -366,36 +423,52 @@ export default function InboxPage() {
             </div>
           </div>
 
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+          {/* Messages — WhatsApp chat background */}
+          <div
+            className="flex-1 overflow-y-auto px-4 py-4 space-y-1"
+            style={{
+              backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23c8d6c8' fill-opacity='0.25'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+              backgroundColor: "#e5ddd5",
+            }}
+          >
             {loadingMsgs ? (
               <div className="flex items-center justify-center py-16">
                 <div className="h-6 w-6 animate-spin rounded-full border-2 border-green-600 border-t-transparent" />
               </div>
             ) : messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
-                <MessageSquare size={32} className="mb-3 text-gray-300" />
-                <p className="text-sm text-gray-400">No messages in this conversation</p>
+                <MessageSquare size={32} className="mb-3 text-gray-400" />
+                <p className="text-sm text-gray-500">No messages in this conversation</p>
               </div>
             ) : (
-              messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`flex ${msg.direction === "outbound" ? "justify-end" : "justify-start"}`}
-                >
-                  <div
-                    className={`max-w-[70%] rounded-2xl px-4 py-2.5 ${
-                      msg.direction === "outbound"
-                        ? "rounded-br-sm bg-green-600 text-white"
-                        : "rounded-bl-sm bg-white text-gray-800 shadow-sm border border-gray-100"
-                    }`}
-                  >
-                    <p className="text-sm leading-relaxed">{msg.text}</p>
-                    <div className={`mt-1 flex items-center justify-end gap-1 ${msg.direction === "outbound" ? "text-green-200" : "text-gray-400"}`}>
-                      <span className="text-[10px]">{formatTime(msg.createdAt)}</span>
-                      {msg.direction === "outbound" && <StatusIcon status={msg.status} />}
-                    </div>
+              groupedMessages.map(({ date, msgs }) => (
+                <div key={date}>
+                  {/* Date separator */}
+                  <div className="flex justify-center my-3">
+                    <span className="rounded-full bg-white/80 px-3 py-1 text-[11px] text-gray-500 shadow-sm">
+                      {date}
+                    </span>
                   </div>
+                  {msgs.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className={`flex mb-1 ${msg.direction === "outbound" ? "justify-end" : "justify-start"}`}
+                    >
+                      <div
+                        className={`whatsapp-chat-bubble max-w-[72%] rounded-[22px] px-4 py-3 shadow-sm ${
+                          msg.direction === "outbound"
+                            ? "outbound bg-[#dcf8c6] text-gray-900 rounded-tr-[6px] rounded-bl-[4px] rounded-tl-[22px] rounded-br-[22px]"
+                            : "inbound bg-white text-gray-900 rounded-tl-[6px] rounded-br-[4px] rounded-bl-[22px] rounded-tr-[22px]"
+                        }`}
+                      >
+                        <p className="text-sm leading-relaxed pr-12 whitespace-pre-wrap">{msg.text}</p>
+                        <div className="absolute bottom-2 right-3 flex items-center gap-1">
+                          <span className="text-[10px] text-gray-500">{formatTime(msg.createdAt)}</span>
+                          {msg.direction === "outbound" && <StatusIcon status={msg.status} />}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ))
             )}
@@ -403,11 +476,17 @@ export default function InboxPage() {
           </div>
 
           {/* Reply Box */}
-          <div className="border-t border-gray-200 bg-white px-4 py-3">
+          <div className="bg-[#e5ddd5] px-4 py-3 border-t border-[#d6d6d6]">
             {sendError && (
-              <p className="mb-2 text-xs text-red-500">{sendError}</p>
+              <p className="mb-2 text-xs text-red-500 px-1">{sendError}</p>
             )}
-            <div className="flex items-end gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus-within:border-green-400 focus-within:ring-1 focus-within:ring-green-100">
+            <div className="flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-sm border border-gray-200">
+              <button className="shrink-0 text-gray-500 hover:text-gray-700 p-2 rounded-full transition-colors hover:bg-gray-100">
+                <Smile size={20} />
+              </button>
+              <button className="shrink-0 text-gray-500 hover:text-gray-700 p-2 rounded-full transition-colors hover:bg-gray-100">
+                <Paperclip size={20} />
+              </button>
               <textarea
                 value={replyText}
                 onChange={(e) => setReplyText(e.target.value)}
@@ -417,36 +496,39 @@ export default function InboxPage() {
                     handleReply();
                   }
                 }}
-                placeholder="Type a message... (Enter to send, Shift+Enter for new line)"
+                placeholder="Type a message"
                 rows={1}
                 className="flex-1 resize-none bg-transparent text-sm outline-none placeholder:text-gray-400"
-                style={{ maxHeight: "120px" }}
+                style={{ maxHeight: "140px" }}
               />
               <button
                 onClick={handleReply}
                 disabled={!replyText.trim() || sending}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
               >
                 {sending ? (
-                  <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
                 ) : (
-                  <Send size={14} />
+                  <Send size={16} />
                 )}
               </button>
             </div>
-            <p className="mt-1.5 text-center text-[11px] text-gray-400">
-              Replying as WhatsApp Business · Messages sent via Meta Cloud API
-            </p>
           </div>
         </div>
       ) : (
         /* Empty State */
-        <div className="flex flex-1 flex-col items-center justify-center bg-[#f0f2f5]">
-          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-white shadow-sm">
-            <MessageSquare size={36} className="text-green-600" />
+        <div
+          className="hidden md:flex flex-1 flex-col items-center justify-center"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23c8d6c8' fill-opacity='0.25'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+            backgroundColor: "#e5ddd5",
+          }}
+        >
+          <div className="rounded-2xl bg-white/80 px-8 py-6 text-center shadow-sm">
+            <MessageSquare size={40} className="mx-auto mb-3 text-green-600" />
+            <p className="text-base font-semibold text-gray-700">Select a conversation</p>
+            <p className="mt-1 text-sm text-gray-400">Choose a conversation from the left to start chatting</p>
           </div>
-          <p className="mt-4 text-base font-semibold text-gray-700">Select a conversation</p>
-          <p className="mt-1 text-sm text-gray-400">Choose a conversation from the left to start chatting</p>
         </div>
       )}
     </div>

@@ -37,6 +37,7 @@ export default function FlowsPage() {
   const [flows, setFlows] = useState<Flow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filter, setFilter] = useState<"All" | "Active" | "Draft">("All");
   const [canvas, setCanvas] = useState<{ open: boolean; flow: Flow | null }>({ open: false, flow: null });
 
@@ -44,9 +45,16 @@ export default function FlowsPage() {
     "Content-Type": "application/json",
   });
 
-  const fetchFlows = async () => {
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 250);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const fetchFlows = async (query = "") => {
     try {
-      const res = await fetch("/api/flows", { headers: authHeaders(), credentials: "include" });
+      setLoading(true);
+      const url = query ? `/api/flows?search=${encodeURIComponent(query)}` : "/api/flows";
+      const res = await fetch(url, { headers: authHeaders(), credentials: "include" });
       if (res.ok) setFlows(await res.json());
     } catch (error) {
       console.error("Error fetching flows:", error);
@@ -55,7 +63,7 @@ export default function FlowsPage() {
     }
   };
 
-  useEffect(() => { fetchFlows(); }, []);
+  useEffect(() => { fetchFlows(debouncedSearch); }, [debouncedSearch]);
 
   const canvasRef = useRef(canvas);
   canvasRef.current = canvas;
@@ -148,7 +156,9 @@ export default function FlowsPage() {
   };
 
   const filtered = flows.filter((f) => {
-    const matchSearch = f.name.toLowerCase().includes(search.toLowerCase());
+    const normalizedSearch = search.trim().toLowerCase();
+    const allowedKeywords = ["active", "draft"];
+    const matchSearch = !normalizedSearch || allowedKeywords.includes(normalizedSearch) ? f.status === normalizedSearch || normalizedSearch === "" : f.name.toLowerCase().includes(normalizedSearch);
     const matchFilter = filter === "All" || (filter === "Active" ? f.status === "active" : f.status !== "active");
     return matchSearch && matchFilter;
   });
@@ -237,8 +247,10 @@ export default function FlowsPage() {
                   </div>
                 ))}
               </div>
-              <p className="text-sm font-medium">No flows yet</p>
-              <p className="text-xs mt-1">Click &quot;New Flow&quot; to build your first automation</p>
+              <p className="text-sm font-medium">{search.trim() ? "No flows match your search" : "No flows yet"}</p>
+              <p className="text-xs mt-1">
+                {search.trim() ? "Try another keyword or clear the search" : "Click &quot;New Flow&quot; to build your first automation"}
+              </p>
             </div>
           ) : (
             <table className="w-full text-sm">

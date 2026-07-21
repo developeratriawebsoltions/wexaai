@@ -50,8 +50,20 @@ export async function GET(req: NextRequest) {
   const workspaceId = await getWorkspaceId(user.id);
   if (!workspaceId) return NextResponse.json({ error: "No workspace" }, { status: 404 });
 
+  const search = req.nextUrl.searchParams.get("search")?.trim();
+
   const flows = await prisma.flow.findMany({
-    where: { workspaceId },
+    where: {
+      workspaceId,
+      ...(search
+        ? {
+            name: {
+              contains: search,
+              mode: "insensitive",
+            },
+          }
+        : {}),
+    },
     include: { nodes: true, edges: true },
     orderBy: { createdAt: "desc" },
   });

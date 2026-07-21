@@ -99,6 +99,39 @@ img {
   max-width: 100%;
 }
 
+.whatsapp-chat-bubble {
+  position: relative;
+  word-break: break-word;
+  line-height: 1.5;
+}
+
+.whatsapp-chat-bubble.outbound {
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
+}
+
+.whatsapp-chat-bubble.inbound {
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04);
+}
+
+.whatsapp-chat-bubble::after {
+  content: "";
+  position: absolute;
+  bottom: 8px;
+  width: 0;
+  height: 0;
+  border: 8px solid transparent;
+}
+
+.whatsapp-chat-bubble.outbound::after {
+  right: -14px;
+  border-left-color: #dcf8c6;
+}
+
+.whatsapp-chat-bubble.inbound::after {
+  left: -14px;
+  border-right-color: #ffffff;
+}
+
 .container {
   width: 100%;
   max-width: 1280px;

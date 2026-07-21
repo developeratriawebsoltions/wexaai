@@ -14,22 +14,24 @@ export async function GET(req: NextRequest) {
 
   const { workspaceId } = membership;
 
-  const [contacts, messages, teamMembers, subscription] = await Promise.all([
+  const [contacts, messages, aiReplies, teamMembers, subscription] = await Promise.all([
     prisma.contact.count({ where: { workspaceId } }),
     prisma.message.count({ where: { workspaceId } }),
+    prisma.message.count({
+      where: {
+        workspaceId,
+        direction: "outbound",
+        from: "AI",
+      },
+    }),
     prisma.workspaceMember.count({ where: { workspaceId } }),
     prisma.subscription.findUnique({ where: { workspaceId }, include: { plan: true } }),
   ]);
 
-  const usage = await prisma.usageLog.findFirst({
-    where: { workspaceId },
-    orderBy: { createdAt: "desc" },
-  });
-
   return NextResponse.json({
     contacts,
     messages,
-    aiUsed: usage?.aiUsed ?? 0,
+    aiUsed: aiReplies,
     teamMembers,
     plan: subscription?.plan ?? null,
   });

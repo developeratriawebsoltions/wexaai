@@ -29,6 +29,7 @@ export async function GET(req: NextRequest) {
     wabaId: account.wabaId,
     status: account.status,
     createdAt: account.createdAt,
+    hasToken: !!account.accessToken,
   });
 }
 
@@ -42,13 +43,23 @@ export async function POST(req: NextRequest) {
 
   const { businessName, phoneNumberId, wabaId, accessToken } = await req.json();
 
-  if (!businessName || !phoneNumberId || !wabaId || !accessToken) {
+  if (!businessName || !phoneNumberId || !wabaId) {
     return NextResponse.json({ error: "All fields are required" }, { status: 400 });
+  }
+
+  // If no new token provided, use existing saved token
+  let tokenToUse = accessToken;
+  if (!tokenToUse) {
+    const existing = await prisma.whatsAppAccount.findUnique({ where: { workspaceId } });
+    if (!existing?.accessToken) {
+      return NextResponse.json({ error: "Access Token is required" }, { status: 400 });
+    }
+    tokenToUse = existing.accessToken;
   }
 
   // Verify credentials against Meta Graph API
   const metaRes = await fetch(
-    `https://graph.facebook.com/v19.0/${phoneNumberId}?fields=display_phone_number,verified_name&access_token=${accessToken}`
+    `https://graph.facebook.com/v19.0/${phoneNumberId}?fields=display_phone_number,verified_name&access_token=${tokenToUse}`
   );
   const metaData = await metaRes.json();
 
@@ -62,8 +73,8 @@ export async function POST(req: NextRequest) {
   // Upsert — update if exists, create if not
   const account = await prisma.whatsAppAccount.upsert({
     where: { workspaceId },
-    update: { phoneNumberId, wabaId, accessToken, businessName, status: "active" },
-    create: { workspaceId, phoneNumberId, wabaId, accessToken, businessName },
+    update: { phoneNumberId, wabaId, accessToken: tokenToUse, businessName, status: "active" },
+    create: { workspaceId, phoneNumberId, wabaId, accessToken: tokenToUse, businessName },
   });
 
   return NextResponse.json({
@@ -72,6 +83,7 @@ export async function POST(req: NextRequest) {
     phoneNumberId: account.phoneNumberId,
     wabaId: account.wabaId,
     status: account.status,
+    hasToken: true,
     verifiedName: metaData.verified_name,
     displayPhone: metaData.display_phone_number,
   });

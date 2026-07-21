@@ -49,6 +49,7 @@ interface ConnectedAccount {
   wabaId: string;
   status: string;
   createdAt: string;
+  hasToken?: boolean;
 }
 
 export default function WhatsAppCloudAPIPage() {
@@ -105,8 +106,14 @@ export default function WhatsAppCloudAPIPage() {
   };
 
   const handleSave = async () => {
-    if (!businessName || !phoneNumberId || !wabaId || !accessToken) {
-      setErrorMsg("All fields are required.");
+    if (!businessName || !phoneNumberId || !wabaId) {
+      setErrorMsg("Business Name, Phone Number ID, and WABA ID are required.");
+      setConnStatus("error");
+      return;
+    }
+    // If already connected and no new token entered, token is not required
+    if (!isConnected && !accessToken) {
+      setErrorMsg("Access Token is required.");
       setConnStatus("error");
       return;
     }
@@ -140,10 +147,11 @@ export default function WhatsAppCloudAPIPage() {
   };
 
   const isConnected = account?.status === "active" || connStatus === "connected";
+  const tokenSaved = !!account?.hasToken || connStatus === "connected" || !!accessToken;
 
   const statusItems = [
     { label: "Business Details", ok: !!businessName },
-    { label: "Access Token", ok: !!accessToken },
+    { label: "Access Token", ok: tokenSaved },
     { label: "Webhook", ok: isConnected },
     { label: "Permissions", ok: isConnected },
   ];
@@ -253,7 +261,7 @@ export default function WhatsAppCloudAPIPage() {
                     type={showToken ? "text" : "password"}
                     value={accessToken}
                     onChange={(e) => setAccessToken(e.target.value)}
-                    placeholder="EAAxxxxxxxxxxxxxxx..."
+                    placeholder={isConnected && !accessToken ? "Token saved — enter new token to update" : "EAAxxxxxxxxxxxxxxx..."}
                     className="flex-1 text-sm outline-none"
                   />
                   <button onClick={() => setShowToken(!showToken)} className="text-gray-400 hover:text-gray-600">

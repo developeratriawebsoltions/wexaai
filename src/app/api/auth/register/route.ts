@@ -1,20 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { hashPassword, signToken } from "@/lib/auth";
+import { verifyOtp, clearOtp } from "@/lib/otp";
 
 function toSlug(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
 
 export async function POST(req: NextRequest) {
-  const { name, email, password, businessName } = await req.json();
+  const { name, email, password, businessName, otp } = await req.json();
 
-  if (!name || !email || !password || !businessName)
+  if (!name || !email || !password || !businessName || !otp)
     return NextResponse.json({ error: "All fields required" }, { status: 400 });
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing)
     return NextResponse.json({ error: "Email already in use" }, { status: 409 });
+
+  const validOtp = verifyOtp(email, "signup", otp);
+  if (!validOtp) {
+    return NextResponse.json({ error: "Invalid or expired OTP" }, { status: 401 });
+  }
 
   const hashed = await hashPassword(password);
 
@@ -33,6 +39,8 @@ export async function POST(req: NextRequest) {
       members: { create: { userId: user.id, role: "owner" } },
     },
   });
+
+  clearOtp(email, "signup");
 
   const token = signToken({ id: user.id, email: user.email });
 
