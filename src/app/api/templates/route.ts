@@ -66,15 +66,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "name, category and body are required" }, { status: 400 });
   }
 
-  type MetaComponent = { type: string; format?: string; text?: string; buttons?: unknown[] };
+  type MetaComponent = { type: string; format?: string; text?: string; example?: { header_url?: string[] }; buttons?: unknown[] };
   // Build Meta API components array
   const components: MetaComponent[] = [];
 
-  if (header) {
+  if (header || headerType) {
+    const isMedia = headerType && ["IMAGE", "VIDEO", "DOCUMENT"].includes(headerType);
     components.push({
       type: "HEADER",
       format: headerType ?? "TEXT",
-      text: headerType === "TEXT" || !headerType ? header : undefined,
+      text: !isMedia ? (header || undefined) : undefined,
+      ...(isMedia && header ? { example: { header_url: [header] } } : {}),
     });
   }
 

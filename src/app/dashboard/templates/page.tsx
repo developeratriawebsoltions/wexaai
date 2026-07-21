@@ -254,9 +254,12 @@ export default function TemplatesPage() {
                     {t.status}
                   </span>
                 </div>
-                {t.header && (
+                {t.headerType === "IMAGE" && t.header ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={t.header} alt="header" className="w-full h-28 object-cover rounded-lg" />
+                ) : t.header ? (
                   <p className="text-xs font-semibold text-gray-700 truncate">{t.header}</p>
-                )}
+                ) : null}
                 <p className="flex-1 whitespace-pre-line rounded-lg bg-gray-50 p-3 text-xs text-gray-600 leading-relaxed line-clamp-4">{t.body}</p>
                 {t.footer && <p className="text-[11px] text-gray-400 italic">{t.footer}</p>}
                 {t.rejectedReason && (
@@ -399,14 +402,17 @@ export default function TemplatesPage() {
 
               <div className="grid grid-cols-3 gap-3">
                 <div className="col-span-2">
-                  <label className="text-xs text-gray-500 mb-1 block">Header (optional)</label>
+                  <label className="text-xs text-gray-500 mb-1 block">
+                    {form.headerType === "TEXT" ? "Header Text (optional)" : form.headerType === "IMAGE" ? "Header Image URL (optional)" : `Header ${form.headerType} URL (optional)`}
+                  </label>
                   <input value={form.header} onChange={e => setForm(f => ({ ...f, header: e.target.value }))}
-                    placeholder="Header text"
+                    placeholder={form.headerType === "TEXT" ? "Header text" : form.headerType === "IMAGE" ? "https://example.com/image.jpg (sample)" : "https://example.com/file"}
                     className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs outline-none focus:border-green-500" />
+                  {form.headerType === "IMAGE" && <p className="mt-1 text-[11px] text-gray-400">Note: You can provide a sample URL. Actual image is sent per message.</p>}
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 mb-1 block">Header Type</label>
-                  <select value={form.headerType} onChange={e => setForm(f => ({ ...f, headerType: e.target.value }))}
+                  <select value={form.headerType} onChange={e => setForm(f => ({ ...f, headerType: e.target.value, header: "" }))}
                     className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs outline-none focus:border-green-500">
                     {["TEXT", "IMAGE", "VIDEO", "DOCUMENT"].map(t => <option key={t}>{t}</option>)}
                   </select>

@@ -29,8 +29,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (template.status !== "APPROVED") return NextResponse.json({ error: "Template is not approved" }, { status: 400 });
 
   // Build components with variable substitution
-  type MetaParam = { type: string; text: string };
+  type MetaParam = { type: string; text?: string; image?: { link: string }; video?: { link: string }; document?: { link: string } };
   const components: { type: string; parameters?: MetaParam[] }[] = [];
+
+  // IMAGE/VIDEO/DOCUMENT header — must send header component with media link
+  if (template.headerType && template.headerType !== "TEXT" && template.header) {
+    const mediaType = template.headerType.toLowerCase() as "image" | "video" | "document";
+    components.push({
+      type: "header",
+      parameters: [{ type: mediaType, [mediaType]: { link: template.header } }],
+    });
+  }
 
   if (variables?.body?.length) {
     components.push({
@@ -94,6 +103,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       direction: "outbound",
       status: "sent",
       messageType: "template",
+      mediaUrl: template.headerType && template.headerType !== "TEXT" ? template.header : null,
     },
   });
 

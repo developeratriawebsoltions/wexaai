@@ -38,6 +38,8 @@ interface Message {
   status: string;
   createdAt: string;
   from: string;
+  messageType: string;
+  mediaUrl?: string | null;
 }
 
 function dateSeparator(iso: string) {
@@ -167,6 +169,7 @@ export default function InboxPage() {
       status: "sending",
       createdAt: new Date().toISOString(),
       from: "me",
+      messageType: "text",
     };
     setMessages((prev) => [...prev, optimistic]);
     const sentText = replyText;
@@ -461,6 +464,10 @@ export default function InboxPage() {
                             : "inbound bg-white text-gray-900 rounded-tl-[6px] rounded-br-[4px] rounded-bl-[22px] rounded-tr-[22px]"
                         }`}
                       >
+                        {msg.mediaUrl && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={msg.mediaUrl} alt="media" className="mb-2 w-full max-w-[260px] rounded-xl object-cover" />
+                        )}
                         <p className="text-sm leading-relaxed pr-12 whitespace-pre-wrap">{msg.text}</p>
                         <div className="absolute bottom-2 right-3 flex items-center gap-1">
                           <span className="text-[10px] text-gray-500">{formatTime(msg.createdAt)}</span>

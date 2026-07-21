@@ -9,7 +9,13 @@ type MetaTemplate = {
   language: string;
   status: string;
   rejected_reason?: string;
-  components?: Array<{ type: string; format?: string; text?: string; buttons?: Array<{ type: string; text: string; url?: string; phone_number?: string }> }>;
+  components?: Array<{
+    type: string;
+    format?: string;
+    text?: string;
+    example?: { header_handle?: string[]; header_url?: string[] };
+    buttons?: Array<{ type: string; text: string; url?: string; phone_number?: string }>;
+  }>;
 };
 
 function extractComponent(components: MetaTemplate["components"], type: string) {
@@ -81,7 +87,7 @@ export async function POST(req: NextRequest) {
         metaTemplateId: t.id,
         status: t.status,
         category: t.category,
-        header: headerComp?.text ?? null,
+        header: headerComp?.text ?? headerComp?.example?.header_url?.[0] ?? headerComp?.example?.header_handle?.[0] ?? null,
         headerType: headerComp?.format ?? null,
         body: bodyComp?.text ?? "",
         footer: footerComp?.text ?? null,
@@ -95,7 +101,7 @@ export async function POST(req: NextRequest) {
         category: t.category,
         language: t.language,
         status: t.status,
-        header: headerComp?.text ?? null,
+        header: headerComp?.text ?? headerComp?.example?.header_url?.[0] ?? headerComp?.example?.header_handle?.[0] ?? null,
         headerType: headerComp?.format ?? null,
         body: bodyComp?.text ?? "",
         footer: footerComp?.text ?? null,
