@@ -188,7 +188,6 @@ export async function runFlow(params: {
           ? (nodeCfg.templateButtons as string[])
           : [];
         const matchedIndex = buttons.findIndex((btn) => btn.toLowerCase() === normalizedButton);
-        console.log("[Flow] ButtonRouter:", { buttons, normalizedButton, matchedIndex });
         const edge =
           matchedIndex >= 0
             ? flow.edges.find(
@@ -196,7 +195,6 @@ export async function runFlow(params: {
                   e.source === currentNodeId && e.sourceHandle === `btn-${matchedIndex}`
               )
             : undefined;
-        console.log("[Flow] ButtonRouter edge:", edge ?? "NOT FOUND");
         currentNodeId = edge?.target ?? null;
         continue;
       }
