@@ -45,13 +45,13 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Handle inbound messages ──
-  const messages = value.messages as Array<{ type: string; from: string; id: string; text?: { body: string } }> | undefined;
+  const messages = value.messages as Array<{ type: string; from: string; id: string; text?: { body: string }; image?: { id: string }; video?: { id: string }; audio?: { id: string }; document?: { id: string } }> | undefined;
   console.log("[Webhook] messages:", JSON.stringify(messages, null, 2));
   if (!messages?.length) return NextResponse.json({ status: "ok" });
 
   const account = await prisma.whatsAppAccount.findFirst({
     where: { phoneNumberId, status: "active" },
-    select: { workspaceId: true },
+    select: { workspaceId: true, accessToken: true },
   });
   if (!account) return NextResponse.json({ status: "ok" });
 
@@ -63,12 +63,32 @@ export async function POST(req: NextRequest) {
     id: string;
     text?: { body: string };
     button?: { text: string; payload: string };
+    image?: { id: string; mime_type?: string };
+    video?: { id: string; mime_type?: string };
+    audio?: { id: string; mime_type?: string };
+    document?: { id: string; filename?: string; mime_type?: string };
   };
+
+  // Helper function to get media download URL from Meta
+  async function getMediaUrl(mediaId: string, accessToken: string): Promise<string | null> {
+    try {
+      const res = await fetch(`https://graph.facebook.com/v19.0/${mediaId}?fields=url&access_token=${accessToken}`);
+      const data = await res.json() as { url?: string };
+      return data.url ?? null;
+    } catch (err) {
+      console.error("[Webhook] Failed to get media URL:", err);
+      return null;
+    }
+  }
 
   for (const m of messages as InboundMessage[]) {
     console.log("[Webhook] Processing message:", JSON.stringify(m, null, 2));
-    // Only handle text and button (template button reply) messages
-    if (m.type !== "text" && m.type !== "button") {
+    // Handle text, button, and media messages
+    const isMedia = ["image", "video", "audio", "document"].includes(m.type);
+    const isText = m.type === "text";
+    const isButton = m.type === "button";
+
+    if (!isMedia && !isText && !isButton) {
       console.log("[Webhook] Skipping unsupported message type:", m.type);
       continue;
     }
@@ -79,10 +99,27 @@ export async function POST(req: NextRequest) {
 
     const contactPhone = normalizePhone(m.from);
 
-    // For button replies: use button.text as the message text, button.payload as payload
-    const isButton = m.type === "button";
-    const text = isButton ? (m.button?.text ?? "") : (m.text?.body ?? "");
-    const buttonPayload = isButton ? (m.button?.payload ?? "") : "";
+    // Extract message content based on type
+    let text = "";
+    let mediaUrl: string | null = null;
+    let messageType = "text";
+
+    if (isButton) {
+      text = m.button?.text ?? "";
+      messageType = "button";
+    } else if (isText) {
+      text = m.text?.body ?? "";
+      messageType = "text";
+    } else if (isMedia) {
+      messageType = m.type;
+      // Get media download URL
+      const mediaIdField = m.type as "image" | "video" | "audio" | "document";
+      const mediaId = m[mediaIdField]?.id;
+      if (mediaId) {
+        mediaUrl = await getMediaUrl(mediaId, account.accessToken);
+        text = `[${m.type.toUpperCase()}]`;
+      }
+    }
 
     const contactName =
       (value.contacts as Array<{ wa_id: string; profile?: { name?: string } }>)
@@ -124,12 +161,13 @@ export async function POST(req: NextRequest) {
         waMessageId: m.id,
         direction: "inbound",
         status: "received",
-        messageType: isButton ? "button" : "text",
+        messageType,
+        mediaUrl,
       },
     });
 
     // Try to run an active flow directly (no HTTP fetch — avoids SSRF and Vercel cold-start issues)
-    const { matched: flowMatched } = await runFlow({ workspaceId, phone: contactPhone, message: text, buttonPayload }).catch(() => ({ matched: false }));
+    const { matched: flowMatched } = await runFlow({ workspaceId, phone: contactPhone, message: text, buttonPayload: isButton ? m.button?.payload ?? "" : "" }).catch(() => ({ matched: false }));
     if (!flowMatched) {
       await handleAiReply(workspaceId, conversation.id, contactPhone, text).catch((err) => {
         console.error("[Webhook] AI reply failed:", err);
