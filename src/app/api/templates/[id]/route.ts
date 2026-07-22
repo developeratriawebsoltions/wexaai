@@ -14,7 +14,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!membership) return NextResponse.json({ error: "No workspace" }, { status: 404 });
 
   const { id } = await params;
-  const { contactId, variables } = await req.json();
+  const { contactId, variables, headerUrl } = await req.json();
   if (!contactId) return NextResponse.json({ error: "contactId required" }, { status: 400 });
 
   const [template, contact, wa] = await Promise.all([
@@ -38,12 +38,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (template.headerType) {
     const isMedia = ["IMAGE", "VIDEO", "DOCUMENT"].includes(template.headerType);
 
-    if (isMedia && template.header) {
-      // Send media header component with the link
+    if (isMedia) {
+      // Use fresh headerUrl if provided, fallback to stored template.header
+      const mediaLink = headerUrl || template.header;
+      if (!mediaLink) return NextResponse.json({ error: `Please provide a ${template.headerType} URL to send this template` }, { status: 400 });
       const mediaKey = template.headerType.toLowerCase() as "image" | "video" | "document";
       components.push({
         type: "header",
-        parameters: [{ type: mediaKey, [mediaKey]: { link: template.header } } as MetaParam],
+        parameters: [{ type: mediaKey, [mediaKey]: { link: mediaLink } } as MetaParam],
       });
     }
     // For TEXT headers: don't send header component — Meta uses the template's stored text
@@ -116,7 +118,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       direction: "outbound",
       status: "sent",
       messageType: "template",
-      mediaUrl: template.headerType && template.headerType !== "TEXT" ? template.header : null,
+      mediaUrl: template.headerType && template.headerType !== "TEXT" ? (headerUrl || template.header) : null,
     },
   });
 

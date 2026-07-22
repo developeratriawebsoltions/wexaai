@@ -59,6 +59,7 @@ export default function TemplatesPage() {
   const [contactSearch, setContactSearch] = useState("");
   const [selectedContact, setSelectedContact] = useState<{ id: string; name: string; phone: string } | null>(null);
   const [bodyVars, setBodyVars] = useState<string[]>([]);
+  const [headerUrl, setHeaderUrl] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
 
@@ -146,6 +147,7 @@ export default function TemplatesPage() {
     const matches = [...t.body.matchAll(/\{\{(\d+)\}\}/g)];
     const count = matches.length ? Math.max(...matches.map(m => parseInt(m[1]))) : 0;
     setBodyVars(Array(count).fill(""));
+    setHeaderUrl(t.header ?? "");
     setSelectedContact(null);
     setContactSearch("");
     setContacts([]);
@@ -177,6 +179,7 @@ export default function TemplatesPage() {
       body: JSON.stringify({
         contactId: selectedContact.id,
         variables: bodyVars.length ? { body: bodyVars } : undefined,
+        headerUrl: headerUrl.trim() || undefined,
       }),
     });
     const data = await res.json();
@@ -337,6 +340,16 @@ export default function TemplatesPage() {
                   </div>
                 )}
               </div>
+
+              {sendTemplate.headerType === "IMAGE" && (
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">Header URL (optional)</label>
+                  <input value={headerUrl} onChange={e => setHeaderUrl(e.target.value)}
+                    placeholder="https://your-public-domain.com/image.jpg"
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs outline-none focus:border-green-500" />
+                  <p className="mt-1 text-[11px] text-gray-400">Use a permanent public URL for the image header.</p>
+                </div>
+              )}
 
               {/* Body variables */}
               {bodyVars.length > 0 && (
