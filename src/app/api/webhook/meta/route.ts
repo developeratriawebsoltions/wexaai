@@ -24,43 +24,28 @@ export async function POST(req: NextRequest) {
 
   const value = body?.entry?.[0]?.changes?.[0]?.value;
   if (!value) return NextResponse.json({ status: "ok" });
-  console.log("[Webhook] value:", JSON.stringify(value, null, 2));
 
   const phoneNumberId: string = value.metadata?.phone_number_id;
   if (!phoneNumberId) return NextResponse.json({ status: "ok" });
   console.log("[Webhook] phoneNumberId:", phoneNumberId);
 
-  // ── Handle outbound delivery status updates (sent/delivered/read/failed) ──
-  // These are NOT new messages — just update existing message status in DB
+  // ── Handle outbound delivery status updates ──
+  // FIX: Do NOT early return — same webhook call can contain both statuses + messages
   const statuses = value.statuses as Array<{ id: string; status: string; errors?: unknown[] }> | undefined;
   if (statuses?.length) {
     for (const s of statuses) {
-      console.log(`[Webhook] Status update — id: ${s.id}, status: ${s.status}`, s.errors ? `errors: ${JSON.stringify(s.errors)}` : "");
+      console.log(`[Webhook] Status update id=${s.id} status=${s.status}`, s.errors ? `errors:${JSON.stringify(s.errors)}` : "");
       await prisma.message.updateMany({
         where: { waMessageId: s.id },
         data: { status: s.status },
       }).catch(() => {});
     }
-    return NextResponse.json({ status: "ok" });
+    // NO early return here — fall through to check messages too
   }
 
   // ── Handle inbound messages ──
-  const messages = value.messages as Array<{ type: string; from: string; id: string; text?: { body: string }; image?: { id: string }; video?: { id: string }; audio?: { id: string }; document?: { id: string } }> | undefined;
-  console.log("[Webhook] messages:", JSON.stringify(messages, null, 2));
-  if (!messages?.length) return NextResponse.json({ status: "ok" });
-
-  const account = await prisma.whatsAppAccount.findFirst({
-    where: { phoneNumberId, status: "active" },
-    select: { workspaceId: true, accessToken: true },
-  });
-  if (!account) return NextResponse.json({ status: "ok" });
-
-  const { workspaceId } = account;
-
-  type InboundMessage = {
-    type: string;
-    from: string;
-    id: string;
+  const messages = value.messages as Array<{
+    type: string; from: string; id: string;
     text?: { body: string };
     button?: { text: string; payload: string };
     interactive?: {
@@ -72,19 +57,30 @@ export async function POST(req: NextRequest) {
     video?: { id: string; mime_type?: string };
     audio?: { id: string; mime_type?: string };
     document?: { id: string; filename?: string; mime_type?: string };
-  };
+  }> | undefined;
 
-  // Download media from Meta and return a proxy URL
+  console.log("[Webhook] messages:", JSON.stringify(messages, null, 2));
+  if (!messages?.length) return NextResponse.json({ status: "ok" });
+
+  const account = await prisma.whatsAppAccount.findFirst({
+    where: { phoneNumberId, status: "active" },
+    select: { workspaceId: true, accessToken: true },
+  });
+  if (!account) {
+    console.log("[Webhook] No active WA account for phoneNumberId:", phoneNumberId);
+    return NextResponse.json({ status: "ok" });
+  }
+
+  const { workspaceId } = account;
+
   async function getMediaUrl(mediaId: string, accessToken: string): Promise<string | null> {
     try {
-      // Step 1: Get the temporary signed URL from Meta
       const metaRes = await fetch(`https://graph.facebook.com/v19.0/${mediaId}?fields=url`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       const metaData = await metaRes.json() as { url?: string };
       if (!metaData.url) return null;
 
-      // Step 2: Download the actual media bytes using Authorization header
       const mediaRes = await fetch(metaData.url, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -93,8 +89,6 @@ export async function POST(req: NextRequest) {
       const buffer = await mediaRes.arrayBuffer();
       const base64 = Buffer.from(buffer).toString("base64");
       const mimeType = mediaRes.headers.get("content-type") ?? "image/jpeg";
-
-      // Return as data URL (works without any CDN/storage setup)
       return `data:${mimeType};base64,${base64}`;
     } catch (err) {
       console.error("[Webhook] Failed to get media URL:", err);
@@ -102,45 +96,52 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  type InboundMessage = typeof messages[number];
+
   for (const m of messages as InboundMessage[]) {
-    console.log("[Webhook] Processing message:", JSON.stringify(m, null, 2));
-    // Handle text, button, interactive, and media messages
+    console.log("[Webhook] Processing message type:", m.type, "from:", m.from, "id:", m.id);
+
     const isMedia = ["image", "video", "audio", "document"].includes(m.type);
     const isText = m.type === "text";
-    const isButton = m.type === "button";           // template quick-reply button
+    const isButton = m.type === "button";           // template quick-reply
     const isInteractive = m.type === "interactive"; // interactive button/list reply
 
     if (!isMedia && !isText && !isButton && !isInteractive) {
-      console.log("[Webhook] Skipping unsupported message type:", m.type);
+      console.log("[Webhook] Skipping unsupported type:", m.type);
       continue;
     }
 
     // Deduplicate
     const existing = await prisma.message.findFirst({ where: { waMessageId: m.id } });
-    if (existing) continue;
+    if (existing) {
+      console.log("[Webhook] Duplicate message, skipping:", m.id);
+      continue;
+    }
 
     const contactPhone = normalizePhone(m.from);
 
-    // Extract message content based on type
     let text = "";
     let mediaUrl: string | null = null;
     let messageType = "text";
+    let effectiveButtonPayload = "";
 
     if (isButton) {
       text = m.button?.text ?? "";
+      effectiveButtonPayload = m.button?.text || m.button?.payload || "";
       messageType = "button";
+      console.log("[Webhook] BUTTON click — text:", text, "payload:", m.button?.payload);
     } else if (isInteractive) {
-      // interactive button_reply or list_reply
       const btnReply = m.interactive?.button_reply;
       const listReply = m.interactive?.list_reply;
       text = btnReply?.title ?? listReply?.title ?? "";
+      effectiveButtonPayload = text;
       messageType = "button";
+      console.log("[Webhook] INTERACTIVE button — title:", text, "id:", btnReply?.id ?? listReply?.id);
     } else if (isText) {
       text = m.text?.body ?? "";
       messageType = "text";
     } else if (isMedia) {
       messageType = m.type;
-      // Get media download URL
       const mediaIdField = m.type as "image" | "video" | "audio" | "document";
       const mediaId = m[mediaIdField]?.id;
       if (mediaId) {
@@ -148,6 +149,8 @@ export async function POST(req: NextRequest) {
         text = `[${m.type.toUpperCase()}]`;
       }
     }
+
+    console.log("[Webhook] effectiveButtonPayload:", effectiveButtonPayload, "| text:", text);
 
     const contactName =
       (value.contacts as Array<{ wa_id: string; profile?: { name?: string } }>)
@@ -194,19 +197,18 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Try to run an active flow directly (no HTTP fetch — avoids SSRF and Vercel cold-start issues)
-    let effectiveButtonPayload = "";
-    if (isButton) {
-      effectiveButtonPayload = m.button?.text || m.button?.payload || "";
-    } else if (isInteractive) {
-      // interactive button_reply title is the display text — matches buttonRouter stored button texts
-      effectiveButtonPayload =
-        m.interactive?.button_reply?.title ||
-        m.interactive?.list_reply?.title ||
-        "";
-    }
-    console.log("[Webhook] effectiveButtonPayload:", effectiveButtonPayload, "| text:", text);
-    const { matched: flowMatched } = await runFlow({ workspaceId, phone: contactPhone, message: text, buttonPayload: effectiveButtonPayload }).catch(() => ({ matched: false }));
+    const { matched: flowMatched } = await runFlow({
+      workspaceId,
+      phone: contactPhone,
+      message: text,
+      buttonPayload: effectiveButtonPayload,
+    }).catch((err) => {
+      console.error("[Webhook] runFlow error:", err);
+      return { matched: false };
+    });
+
+    console.log("[Webhook] flowMatched:", flowMatched);
+
     if (!flowMatched) {
       await handleAiReply(workspaceId, conversation.id, contactPhone, text).catch((err) => {
         console.error("[Webhook] AI reply failed:", err);

@@ -52,12 +52,13 @@ async function sendTemplateMessage(
     where: { workspaceId_name_language: { workspaceId, name: templateName, language } },
   });
 
+  console.log("[Flow] DB template found:", JSON.stringify(template));
+
   const components: { type: string; parameters?: { type: string; text?: string; image?: { link: string }; video?: { link: string }; document?: { link: string } }[] }[] = [];
 
   if (template?.headerType) {
     const isMedia = ["IMAGE", "VIDEO", "DOCUMENT"].includes(template.headerType);
     if (isMedia) {
-      // Use per-send headerImageUrl from flow node config, fallback to template's stored header
       const mediaLink = headerImageUrl || template.header || "";
       if (mediaLink) {
         const mediaKey = template.headerType.toLowerCase() as "image" | "video" | "document";
@@ -67,7 +68,6 @@ async function sendTemplateMessage(
         });
       }
     }
-    // For TEXT headers: don't send header component — Meta uses the template's stored text
   }
 
   const metaPayload: Record<string, unknown> = {
@@ -81,6 +81,8 @@ async function sendTemplateMessage(
     },
   };
 
+  console.log("[Flow] sendTemplateMessage payload:", JSON.stringify(metaPayload));
+
   const res = await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
@@ -89,6 +91,8 @@ async function sendTemplateMessage(
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     console.error("[Flow] sendTemplateMessage failed:", JSON.stringify(err));
+  } else {
+    console.log("[Flow] sendTemplateMessage success:", templateName);
   }
   return res.ok;
 }
@@ -115,7 +119,20 @@ export async function runFlow(params: {
   const normalizedMessage = message.toLowerCase();
   const normalizedButton  = buttonPayload.toLowerCase() || normalizedMessage;
 
-  console.log("[Flow] runFlow called:", { workspaceId, phone, message, buttonPayload, totalFlows: flows.length });
+  console.log("[Flow] ===== runFlow called =====");
+  console.log("[Flow] params:", { workspaceId, phone, message, buttonPayload });
+  console.log("[Flow] totalFlows:", flows.length);
+
+  // ── DUMP ALL FLOWS RAW FOR DEBUGGING ──────────────────────────────────────
+  for (const f of flows) {
+    console.log(`[Flow] RAW flow "${f.name}" status=${f.status}`);
+    for (const n of f.nodes) {
+      console.log(`[Flow]   node id=${n.id} type=${n.type} config=${JSON.stringify(n.config)}`);
+    }
+    for (const e of f.edges) {
+      console.log(`[Flow]   edge source=${e.source} target=${e.target} sourceHandle=${e.sourceHandle}`);
+    }
+  }
 
   for (const flow of flows) {
     const trigger = flow.nodes.find((n: FlowNodeLike) => n.type === "trigger");
@@ -124,19 +141,32 @@ export async function runFlow(params: {
     const triggerCfg   = cfg(trigger);
     const triggerEvent = typeof triggerCfg.event === "string" ? triggerCfg.event : "message";
     const keyword      = typeof triggerCfg.keyword === "string" ? triggerCfg.keyword.toLowerCase() : "";
-
-    console.log("[Flow] Checking flow:", flow.name, { triggerEvent, keyword, buttonPayload, normalizedMessage });
-
-    // button_reply trigger: only match when buttonPayload present
-    if (triggerEvent === "button_reply" && !buttonPayload) { console.log("[Flow] Skip: button_reply trigger but no buttonPayload"); continue; }
-    // message trigger with keyword: only apply keyword filter for plain text messages (not button replies)
-    // If this is a button reply, skip keyword check — the button router will handle matching
     const flowHasButtonRouter = flow.nodes.some((n: FlowNodeLike) => n.type === "buttonRouter");
-    if (triggerEvent === "message" && keyword && !buttonPayload && !normalizedMessage.includes(keyword)) { console.log("[Flow] Skip: keyword mismatch"); continue; }
-    // If button reply but flow has no buttonRouter and trigger is not button_reply, skip
-    if (buttonPayload && triggerEvent === "message" && !flowHasButtonRouter) { console.log("[Flow] Skip: button reply but flow has no buttonRouter"); continue; }
 
-    console.log("[Flow] Flow matched, executing:", flow.name);
+    console.log(`[Flow] Checking flow="${flow.name}" triggerEvent=${triggerEvent} keyword="${keyword}" flowHasButtonRouter=${flowHasButtonRouter}`);
+    console.log(`[Flow]   buttonPayload="${buttonPayload}" message="${message}"`);
+
+    if (triggerEvent === "button_reply" && !buttonPayload) {
+      console.log("[Flow] SKIP: button_reply trigger but no buttonPayload");
+      continue;
+    }
+
+    if (triggerEvent === "message") {
+      if (buttonPayload) {
+        if (!flowHasButtonRouter) {
+          console.log("[Flow] SKIP: button reply but flow has no buttonRouter");
+          continue;
+        }
+        console.log("[Flow] MATCH: button reply + flow has buttonRouter");
+      } else {
+        if (keyword && !normalizedMessage.includes(keyword)) {
+          console.log(`[Flow] SKIP: keyword mismatch keyword="${keyword}" msg="${normalizedMessage}"`);
+          continue;
+        }
+      }
+    }
+
+    console.log("[Flow] EXECUTING flow:", flow.name);
 
     const executed = new Set<string>();
     let currentNodeId: string | null = trigger.id;
@@ -146,9 +176,9 @@ export async function runFlow(params: {
       executed.add(currentNodeId);
 
       const node = flow.nodes.find((n: FlowNodeLike) => n.id === currentNodeId);
-      if (!node) { console.log("[Flow] Node not found:", currentNodeId); break; }
+      if (!node) { console.log("[Flow] Node not found id:", currentNodeId); break; }
 
-      console.log("[Flow] Executing node:", { id: node.id, type: node.type });
+      console.log(`[Flow] >> node id=${node.id} type=${node.type} config=${JSON.stringify(node.config)}`);
 
       const nodeCfg = cfg(node);
 
@@ -176,6 +206,7 @@ export async function runFlow(params: {
           matched = matchType === "all" ? words.every(check) : words.some(check);
         }
 
+        console.log(`[Flow] condition matched=${matched}`);
         const edge =
           flow.edges.find(
             (e: FlowEdgeLike) => e.source === currentNodeId && e.sourceHandle === (matched ? "yes" : "no")
@@ -205,35 +236,53 @@ export async function runFlow(params: {
       }
 
       // ── SEND TEMPLATE ──────────────────────────────────────────────────────
-      // Always send template unless this specific run was triggered by a button reply
-      // (button reply = user clicked a button on a previously sent template)
-      if (node.type === "template" && !buttonPayload) {
-        const templateName     = typeof nodeCfg.templateName === "string" ? nodeCfg.templateName : "";
-        const templateLanguage = typeof nodeCfg.templateLanguage === "string" ? nodeCfg.templateLanguage : "en";
-        const headerImageUrl   = typeof nodeCfg.headerImageUrl === "string" ? nodeCfg.headerImageUrl.trim() : "";
-        const typingDelay      = Number(nodeCfg.typingDelay) || 0;
-        if (templateName) {
-          if (typingDelay > 0) await sleep(typingDelay * 1000);
-          await sendTemplateMessage(workspaceId, phoneNumberId, accessToken, phone, templateName, templateLanguage, headerImageUrl || undefined);
+      if (node.type === "template") {
+        const nextEdge = flow.edges.find((e: FlowEdgeLike) => e.source === currentNodeId);
+        const nextNode = nextEdge?.target
+          ? flow.nodes.find((n: FlowNodeLike) => n.id === nextEdge.target)
+          : null;
+        const isFollowedByButtonRouter = nextNode?.type === "buttonRouter";
+        const skipSend = buttonPayload && isFollowedByButtonRouter;
+
+        console.log("[Flow] template node:", {
+          templateName: nodeCfg.templateName,
+          nextNodeType: nextNode?.type ?? "none",
+          isFollowedByButtonRouter,
+          skipSend,
+        });
+
+        if (!skipSend) {
+          const templateName     = typeof nodeCfg.templateName === "string" ? nodeCfg.templateName : "";
+          const templateLanguage = typeof nodeCfg.templateLanguage === "string" ? nodeCfg.templateLanguage : "en";
+          const headerImageUrl   = typeof nodeCfg.headerImageUrl === "string" ? nodeCfg.headerImageUrl.trim() : "";
+          const typingDelay      = Number(nodeCfg.typingDelay) || 0;
+          if (templateName) {
+            if (typingDelay > 0) await sleep(typingDelay * 1000);
+            await sendTemplateMessage(workspaceId, phoneNumberId, accessToken, phone, templateName, templateLanguage, headerImageUrl || undefined);
+          } else {
+            console.error("[Flow] Template node missing templateName! node id:", node.id, "full config:", JSON.stringify(node.config));
+          }
         }
       }
 
       // ── BUTTON ROUTER ──────────────────────────────────────────────────────
       if (node.type === "buttonRouter") {
-        const buttons: string[] = Array.isArray(nodeCfg.templateButtons)
-          ? (nodeCfg.templateButtons as string[])
+        const rawButtons = nodeCfg.templateButtons;
+        console.log("[Flow] buttonRouter raw templateButtons:", JSON.stringify(rawButtons));
+        const buttons: string[] = Array.isArray(rawButtons)
+          ? (rawButtons as string[])
           : [];
-        // Match against buttonPayload (interactive/button reply title) or plain message text
         const buttonToMatch = (buttonPayload || message).toLowerCase().trim();
+        console.log("[Flow] buttonRouter buttons:", buttons, "buttonToMatch:", buttonToMatch);
         const matchedIndex = buttons.findIndex(
           (btn) =>
             btn.toLowerCase().trim() === buttonToMatch ||
             buttonToMatch.includes(btn.toLowerCase().trim()) ||
             btn.toLowerCase().trim().includes(buttonToMatch)
         );
-        console.log("[Flow] ButtonRouter match:", { buttons, buttonToMatch, matchedIndex });
+        console.log("[Flow] buttonRouter matchedIndex:", matchedIndex);
         if (matchedIndex < 0) {
-          console.log("[Flow] ButtonRouter: no button matched, stopping flow");
+          console.log("[Flow] STOP: buttonRouter no match");
           currentNodeId = null;
           continue;
         }
@@ -241,13 +290,17 @@ export async function runFlow(params: {
           (e: FlowEdgeLike) =>
             e.source === currentNodeId && e.sourceHandle === `btn-${matchedIndex}`
         );
-        console.log("[Flow] ButtonRouter edge found:", edge ?? "NONE");
+        console.log("[Flow] buttonRouter edge for btn-" + matchedIndex + ":", JSON.stringify(edge ?? "NONE"));
+        // Log ALL edges from this node for debugging
+        const allEdgesFromRouter = flow.edges.filter((e: FlowEdgeLike) => e.source === currentNodeId);
+        console.log("[Flow] ALL edges from buttonRouter:", JSON.stringify(allEdgesFromRouter));
         currentNodeId = edge?.target ?? null;
         continue;
       }
 
       // ── NEXT NODE ──────────────────────────────────────────────────────────
       const nextEdge = flow.edges.find((e: FlowEdgeLike) => e.source === currentNodeId);
+      console.log("[Flow] next edge:", JSON.stringify(nextEdge ?? "NONE"));
       currentNodeId = nextEdge?.target ?? null;
     }
 
