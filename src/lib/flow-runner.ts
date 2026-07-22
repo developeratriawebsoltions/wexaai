@@ -45,7 +45,8 @@ async function sendTemplateMessage(
   accessToken: string,
   to: string,
   templateName: string,
-  language: string
+  language: string,
+  headerImageUrl?: string
 ) {
   const template = await prisma.template.findUnique({
     where: { workspaceId_name_language: { workspaceId, name: templateName, language } },
@@ -55,13 +56,16 @@ async function sendTemplateMessage(
 
   if (template?.headerType) {
     const isMedia = ["IMAGE", "VIDEO", "DOCUMENT"].includes(template.headerType);
-    if (isMedia && template.header) {
-      // Send media header component with the link
-      const mediaKey = template.headerType.toLowerCase() as "image" | "video" | "document";
-      components.push({
-        type: "header",
-        parameters: [{ type: mediaKey, [mediaKey]: { link: template.header } }],
-      });
+    if (isMedia) {
+      // Use per-send headerImageUrl from flow node config, fallback to template's stored header
+      const mediaLink = headerImageUrl || template.header || "";
+      if (mediaLink) {
+        const mediaKey = template.headerType.toLowerCase() as "image" | "video" | "document";
+        components.push({
+          type: "header",
+          parameters: [{ type: mediaKey, [mediaKey]: { link: mediaLink } }],
+        });
+      }
     }
     // For TEXT headers: don't send header component — Meta uses the template's stored text
   }
@@ -125,8 +129,12 @@ export async function runFlow(params: {
 
     // button_reply trigger: only match when buttonPayload present
     if (triggerEvent === "button_reply" && !buttonPayload) { console.log("[Flow] Skip: button_reply trigger but no buttonPayload"); continue; }
-    // message trigger with keyword: skip keyword check if this is a button reply
+    // message trigger with keyword: only apply keyword filter for plain text messages (not button replies)
+    // If this is a button reply, skip keyword check — the button router will handle matching
+    const flowHasButtonRouter = flow.nodes.some((n: FlowNodeLike) => n.type === "buttonRouter");
     if (triggerEvent === "message" && keyword && !buttonPayload && !normalizedMessage.includes(keyword)) { console.log("[Flow] Skip: keyword mismatch"); continue; }
+    // If button reply but flow has no buttonRouter and trigger is not button_reply, skip
+    if (buttonPayload && triggerEvent === "message" && !flowHasButtonRouter) { console.log("[Flow] Skip: button reply but flow has no buttonRouter"); continue; }
 
     console.log("[Flow] Flow matched, executing:", flow.name);
 
@@ -197,14 +205,16 @@ export async function runFlow(params: {
       }
 
       // ── SEND TEMPLATE ──────────────────────────────────────────────────────
-      // Skip re-sending template if this run was triggered by a button reply
+      // Always send template unless this specific run was triggered by a button reply
+      // (button reply = user clicked a button on a previously sent template)
       if (node.type === "template" && !buttonPayload) {
         const templateName     = typeof nodeCfg.templateName === "string" ? nodeCfg.templateName : "";
         const templateLanguage = typeof nodeCfg.templateLanguage === "string" ? nodeCfg.templateLanguage : "en";
+        const headerImageUrl   = typeof nodeCfg.headerImageUrl === "string" ? nodeCfg.headerImageUrl.trim() : "";
         const typingDelay      = Number(nodeCfg.typingDelay) || 0;
         if (templateName) {
           if (typingDelay > 0) await sleep(typingDelay * 1000);
-          await sendTemplateMessage(workspaceId, phoneNumberId, accessToken, phone, templateName, templateLanguage);
+          await sendTemplateMessage(workspaceId, phoneNumberId, accessToken, phone, templateName, templateLanguage, headerImageUrl || undefined);
         }
       }
 
@@ -213,14 +223,25 @@ export async function runFlow(params: {
         const buttons: string[] = Array.isArray(nodeCfg.templateButtons)
           ? (nodeCfg.templateButtons as string[])
           : [];
-        const matchedIndex = buttons.findIndex((btn) => btn.toLowerCase() === normalizedButton);
-        const edge =
-          matchedIndex >= 0
-            ? flow.edges.find(
-                (e: FlowEdgeLike) =>
-                  e.source === currentNodeId && e.sourceHandle === `btn-${matchedIndex}`
-              )
-            : undefined;
+        // Match against buttonPayload (interactive/button reply title) or plain message text
+        const buttonToMatch = (buttonPayload || message).toLowerCase().trim();
+        const matchedIndex = buttons.findIndex(
+          (btn) =>
+            btn.toLowerCase().trim() === buttonToMatch ||
+            buttonToMatch.includes(btn.toLowerCase().trim()) ||
+            btn.toLowerCase().trim().includes(buttonToMatch)
+        );
+        console.log("[Flow] ButtonRouter match:", { buttons, buttonToMatch, matchedIndex });
+        if (matchedIndex < 0) {
+          console.log("[Flow] ButtonRouter: no button matched, stopping flow");
+          currentNodeId = null;
+          continue;
+        }
+        const edge = flow.edges.find(
+          (e: FlowEdgeLike) =>
+            e.source === currentNodeId && e.sourceHandle === `btn-${matchedIndex}`
+        );
+        console.log("[Flow] ButtonRouter edge found:", edge ?? "NONE");
         currentNodeId = edge?.target ?? null;
         continue;
       }

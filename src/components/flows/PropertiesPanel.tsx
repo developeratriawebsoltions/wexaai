@@ -40,6 +40,8 @@ interface TemplateOption {
   language: string;
   body: string;
   status: string;
+  headerType?: string | null;
+  header?: string | null;
   buttons?: TemplateButton[] | null;
 }
 
@@ -60,6 +62,7 @@ function TemplateConfig({ node, onUpdate }: { node: Node; onUpdate: (d: Record<s
   const { templates, loading } = useApprovedTemplates();
   const selected = templates.find((t) => t.id === node.data.templateId);
   const quickReplies = selected?.buttons?.filter((b) => b.type === "QUICK_REPLY") ?? [];
+  const isImageTemplate = selected?.headerType === "IMAGE";
 
   return (
     <div className="space-y-4">
@@ -84,20 +87,54 @@ function TemplateConfig({ node, onUpdate }: { node: Node; onUpdate: (d: Record<s
                 templateId: e.target.value,
                 templateName: t?.name ?? "",
                 templateLanguage: t?.language ?? "en",
+                templateHeaderType: t?.headerType ?? null,
                 templateButtons: qr.map((b) => b.text),
+                // clear headerImageUrl when switching templates
+                headerImageUrl: "",
               });
             }}
           >
             <option value="">Select a template...</option>
             {templates.map((t) => (
-              <option key={t.id} value={t.id}>{t.name} ({t.language})</option>
+              <option key={t.id} value={t.id}>
+                {t.name} ({t.language}){t.headerType === "IMAGE" ? " 🖼️" : ""}
+              </option>
             ))}
           </select>
         )}
       </div>
+
+      {/* Image header URL — only shown when selected template has IMAGE header */}
+      {isImageTemplate && (
+        <div>
+          <label className={labelCls}>Header Image URL</label>
+          <input
+            className={inputCls}
+            placeholder="https://example.com/image.jpg"
+            value={(node.data.headerImageUrl as string) || ""}
+            onChange={(e) => onUpdate({ headerImageUrl: e.target.value })}
+          />
+          {/* Live preview */}
+          {(node.data.headerImageUrl as string) && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={node.data.headerImageUrl as string}
+              alt="header preview"
+              className="mt-2 w-full h-28 object-cover rounded-lg border border-gray-200"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+              onLoad={(e) => { (e.target as HTMLImageElement).style.display = "block"; }}
+            />
+          )}
+          <p className="text-[11px] text-gray-400 mt-1">Must be a permanent public URL (HTTPS)</p>
+        </div>
+      )}
+
       {selected && (
         <div className="rounded-lg bg-gray-50 border border-gray-100 px-3 py-2 space-y-1.5">
           <p className="text-[10px] font-bold text-gray-400 uppercase">Preview</p>
+          {selected.headerType === "TEXT" && selected.header && (
+            <p className="text-[11px] font-bold text-gray-700">{selected.header}</p>
+          )}
           <p className="text-xs text-gray-600 leading-snug">{selected.body}</p>
           {quickReplies.length > 0 && (
             <div className="flex flex-wrap gap-1 pt-1">

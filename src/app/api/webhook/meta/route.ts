@@ -63,6 +63,11 @@ export async function POST(req: NextRequest) {
     id: string;
     text?: { body: string };
     button?: { text: string; payload: string };
+    interactive?: {
+      type: string;
+      button_reply?: { id: string; title: string };
+      list_reply?: { id: string; title: string; description?: string };
+    };
     image?: { id: string; mime_type?: string };
     video?: { id: string; mime_type?: string };
     audio?: { id: string; mime_type?: string };
@@ -99,12 +104,13 @@ export async function POST(req: NextRequest) {
 
   for (const m of messages as InboundMessage[]) {
     console.log("[Webhook] Processing message:", JSON.stringify(m, null, 2));
-    // Handle text, button, and media messages
+    // Handle text, button, interactive, and media messages
     const isMedia = ["image", "video", "audio", "document"].includes(m.type);
     const isText = m.type === "text";
-    const isButton = m.type === "button";
+    const isButton = m.type === "button";           // template quick-reply button
+    const isInteractive = m.type === "interactive"; // interactive button/list reply
 
-    if (!isMedia && !isText && !isButton) {
+    if (!isMedia && !isText && !isButton && !isInteractive) {
       console.log("[Webhook] Skipping unsupported message type:", m.type);
       continue;
     }
@@ -122,6 +128,12 @@ export async function POST(req: NextRequest) {
 
     if (isButton) {
       text = m.button?.text ?? "";
+      messageType = "button";
+    } else if (isInteractive) {
+      // interactive button_reply or list_reply
+      const btnReply = m.interactive?.button_reply;
+      const listReply = m.interactive?.list_reply;
+      text = btnReply?.title ?? listReply?.title ?? "";
       messageType = "button";
     } else if (isText) {
       text = m.text?.body ?? "";
@@ -183,7 +195,18 @@ export async function POST(req: NextRequest) {
     });
 
     // Try to run an active flow directly (no HTTP fetch — avoids SSRF and Vercel cold-start issues)
-    const { matched: flowMatched } = await runFlow({ workspaceId, phone: contactPhone, message: text, buttonPayload: isButton ? m.button?.payload ?? "" : "" }).catch(() => ({ matched: false }));
+    let effectiveButtonPayload = "";
+    if (isButton) {
+      effectiveButtonPayload = m.button?.text || m.button?.payload || "";
+    } else if (isInteractive) {
+      // interactive button_reply title is the display text — matches buttonRouter stored button texts
+      effectiveButtonPayload =
+        m.interactive?.button_reply?.title ||
+        m.interactive?.list_reply?.title ||
+        "";
+    }
+    console.log("[Webhook] effectiveButtonPayload:", effectiveButtonPayload, "| text:", text);
+    const { matched: flowMatched } = await runFlow({ workspaceId, phone: contactPhone, message: text, buttonPayload: effectiveButtonPayload }).catch(() => ({ matched: false }));
     if (!flowMatched) {
       await handleAiReply(workspaceId, conversation.id, contactPhone, text).catch((err) => {
         console.error("[Webhook] AI reply failed:", err);

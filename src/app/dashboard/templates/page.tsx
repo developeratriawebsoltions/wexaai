@@ -245,46 +245,91 @@ export default function TemplatesPage() {
               className="text-xs text-green-600 hover:underline">Create your first template</button>
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {templates.map(t => (
-              <div key={t.id} className="rounded-xl border border-gray-200 bg-white p-4 flex flex-col gap-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-gray-800">{t.name}</p>
-                    <p className="text-xs text-gray-400">{t.category} · {t.language}</p>
+              <div key={t.id} className="flex flex-col bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                {/* Card header: name, category, status */}
+                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-gray-800 truncate">{t.name}</p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">{t.category} · {t.language.toUpperCase()}</p>
                   </div>
-                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_STYLE[t.status] ?? "bg-gray-100 text-gray-500"}`}>
+                  <span className={`ml-2 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_STYLE[t.status] ?? "bg-gray-100 text-gray-500"}`}>
                     {t.status}
                   </span>
                 </div>
-                {t.headerType === "IMAGE" && t.header ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={t.header} alt="header" className="w-full h-28 object-cover rounded-lg" />
-                ) : t.header ? (
-                  <p className="text-xs font-semibold text-gray-700 truncate">{t.header}</p>
-                ) : null}
-                <p className="flex-1 whitespace-pre-line rounded-lg bg-gray-50 p-3 text-xs text-gray-600 leading-relaxed line-clamp-4">{t.body}</p>
-                {t.footer && <p className="text-[11px] text-gray-400 italic">{t.footer}</p>}
+
+                {/* WhatsApp bubble preview */}
+                <div className="flex-1 bg-[#e5ddd5] px-4 py-4" style={{backgroundImage: "url('data:image/svg+xml,%3Csvg width=\'20\' height=\'20\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3C/svg%3E')"}}>
+                  <div className="ml-auto max-w-[90%] rounded-lg bg-white shadow-sm overflow-hidden">
+                    {/* Image header */}
+                    {t.headerType === "IMAGE" && t.header ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={t.header} alt="header" className="w-full h-28 object-cover" />
+                    ) : t.header ? (
+                      <div className="px-3 pt-2.5 pb-1">
+                        <p className="text-[12px] font-bold text-gray-800 leading-snug">{t.header}</p>
+                      </div>
+                    ) : null}
+
+                    {/* Body */}
+                    <div className="px-3 pt-2 pb-1">
+                      <p className="text-[12px] text-gray-800 leading-relaxed whitespace-pre-line line-clamp-5">{t.body}</p>
+                    </div>
+
+                    {/* Footer */}
+                    {t.footer && (
+                      <div className="px-3 pb-2">
+                        <p className="text-[10px] text-gray-400">{t.footer}</p>
+                      </div>
+                    )}
+
+                    {/* Timestamp tick */}
+                    <div className="flex justify-end px-2 pb-1">
+                      <span className="text-[10px] text-gray-400">10:30 AM ✓✓</span>
+                    </div>
+
+                    {/* Buttons inside bubble */}
+                    {t.buttons && t.buttons.length > 0 && (
+                      <div className="border-t border-gray-100">
+                        {t.buttons.map((b, i) => (
+                          <div key={i} className={`flex items-center justify-center gap-1.5 py-2 text-[12px] font-medium text-[#00a884] ${i < t.buttons!.length - 1 ? "border-b border-gray-100" : ""}` }>
+                            {b.type === "URL" && (
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                            )}
+                            {b.type === "PHONE_NUMBER" && (
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                            )}
+                            {b.type === "QUICK_REPLY" && (
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                            )}
+                            {b.text}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Rejected reason */}
                 {t.rejectedReason && (
-                  <p className="text-[11px] text-red-500">Reason: {t.rejectedReason}</p>
-                )}
-                {t.buttons && t.buttons.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {t.buttons.map((b, i) => (
-                      <span key={i} className="rounded border border-gray-200 px-2 py-0.5 text-[11px] text-gray-600">{b.text}</span>
-                    ))}
+                  <div className="px-4 py-2 bg-red-50">
+                    <p className="text-[11px] text-red-500">Rejected: {t.rejectedReason}</p>
                   </div>
                 )}
-                <div className="flex justify-end gap-2">
+
+                {/* Actions */}
+                <div className="flex items-center justify-end gap-2 px-4 py-2.5 border-t border-gray-100">
                   {t.status === "APPROVED" && (
                     <button onClick={() => openSendModal(t)}
-                      className="text-gray-300 hover:text-green-600 transition" title="Send to contact">
-                      <Send size={14} />
+                      className="flex items-center gap-1 rounded-lg bg-green-50 px-2.5 py-1.5 text-[11px] font-medium text-green-700 hover:bg-green-100 transition" title="Send to contact">
+                      <Send size={11} /> Send
                     </button>
                   )}
                   <button onClick={() => handleDelete(t.id)} disabled={deletingId === t.id}
-                    className="text-gray-300 hover:text-red-500 transition disabled:opacity-40">
-                    {deletingId === t.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                    className="flex items-center gap-1 rounded-lg bg-red-50 px-2.5 py-1.5 text-[11px] font-medium text-red-500 hover:bg-red-100 transition disabled:opacity-40">
+                    {deletingId === t.id ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
+                    Delete
                   </button>
                 </div>
               </div>

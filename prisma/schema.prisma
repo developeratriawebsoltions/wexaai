@@ -270,7 +270,6 @@ model Template {
   language       String    @default("en")
   header         String?
   headerType     String?
-  headerHandle   String?
   body           String
   footer         String?
   buttons        Json?
@@ -278,6 +277,7 @@ model Template {
   rejectedReason String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+  headerHandle   String?
   workspace      Workspace @relation(fields: [workspaceId], references: [id])
 
   @@unique([workspaceId, name, language])
