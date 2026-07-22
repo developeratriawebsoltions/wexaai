@@ -37,26 +37,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   if (template.headerType) {
     const isMedia = ["IMAGE", "VIDEO", "DOCUMENT"].includes(template.headerType);
-    const isSampleUrl = template.header?.includes("scontent.whatsapp.net");
-    const isCustomUrl = template.header && !isSampleUrl;
 
-    if (isMedia) {
-      if (isCustomUrl) {
-        // Only send header component if it's a custom/user-provided URL
-        // Sample URLs from Meta expire and cause 403 errors — let Meta use the stored template image instead
-        const mediaKey = template.headerType.toLowerCase() as "image" | "video" | "document";
-        components.push({
-          type: "header",
-          parameters: [{ type: mediaKey, [mediaKey]: { link: template.header } } as MetaParam],
-        });
-      }
-      // If sample URL — don't send header component, Meta will use the template's stored image
-    } else if (template.headerType === "TEXT" && template.header) {
+    if (isMedia && template.header) {
+      // Send media header component with the link
+      const mediaKey = template.headerType.toLowerCase() as "image" | "video" | "document";
       components.push({
         type: "header",
-        parameters: [{ type: "text", text: template.header }],
+        parameters: [{ type: mediaKey, [mediaKey]: { link: template.header } } as MetaParam],
       });
     }
+    // For TEXT headers: don't send header component — Meta uses the template's stored text
   }
 
   if (variables?.body?.length) {

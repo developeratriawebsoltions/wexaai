@@ -53,26 +53,17 @@ async function sendTemplateMessage(
 
   const components: { type: string; parameters?: { type: string; text?: string; image?: { link: string }; video?: { link: string }; document?: { link: string } }[] }[] = [];
 
-  // scontent.whatsapp.net URLs are Meta sample/review images — not valid at runtime
-  const isSampleUrl = template?.header?.includes("scontent.whatsapp.net");
-  const hasValidUrl = template?.header && !isSampleUrl;
-
   if (template?.headerType) {
     const isMedia = ["IMAGE", "VIDEO", "DOCUMENT"].includes(template.headerType);
-    if (isMedia && hasValidUrl) {
-      // Only send header component if it's a custom/user-provided URL
-      // Sample URLs from Meta expire and cause 403 errors — let Meta use the stored template image instead
+    if (isMedia && template.header) {
+      // Send media header component with the link
       const mediaKey = template.headerType.toLowerCase() as "image" | "video" | "document";
       components.push({
         type: "header",
         parameters: [{ type: mediaKey, [mediaKey]: { link: template.header } }],
       });
-    } else if (template.headerType === "TEXT" && template.header) {
-      components.push({
-        type: "header",
-        parameters: [{ type: "text", text: template.header }],
-      });
     }
+    // For TEXT headers: don't send header component — Meta uses the template's stored text
   }
 
   const metaPayload: Record<string, unknown> = {
