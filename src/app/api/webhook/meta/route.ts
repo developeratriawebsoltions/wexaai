@@ -69,12 +69,28 @@ export async function POST(req: NextRequest) {
     document?: { id: string; filename?: string; mime_type?: string };
   };
 
-  // Helper function to get media download URL from Meta
+  // Download media from Meta and return a proxy URL
   async function getMediaUrl(mediaId: string, accessToken: string): Promise<string | null> {
     try {
-      const res = await fetch(`https://graph.facebook.com/v19.0/${mediaId}?fields=url&access_token=${accessToken}`);
-      const data = await res.json() as { url?: string };
-      return data.url ?? null;
+      // Step 1: Get the temporary signed URL from Meta
+      const metaRes = await fetch(`https://graph.facebook.com/v19.0/${mediaId}?fields=url`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const metaData = await metaRes.json() as { url?: string };
+      if (!metaData.url) return null;
+
+      // Step 2: Download the actual media bytes using Authorization header
+      const mediaRes = await fetch(metaData.url, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!mediaRes.ok) return null;
+
+      const buffer = await mediaRes.arrayBuffer();
+      const base64 = Buffer.from(buffer).toString("base64");
+      const mimeType = mediaRes.headers.get("content-type") ?? "image/jpeg";
+
+      // Return as data URL (works without any CDN/storage setup)
+      return `data:${mimeType};base64,${base64}`;
     } catch (err) {
       console.error("[Webhook] Failed to get media URL:", err);
       return null;
