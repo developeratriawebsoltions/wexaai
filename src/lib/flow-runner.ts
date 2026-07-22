@@ -59,9 +59,9 @@ async function sendTemplateMessage(
 
   if (template?.headerType) {
     const isMedia = ["IMAGE", "VIDEO", "DOCUMENT"].includes(template.headerType);
-    if (isMedia && template.header) {
-      // Always send media header component when header is present, even if it's a sample URL
-      // Meta requires the header component to match the template's defined format
+    if (isMedia && hasValidUrl) {
+      // Only send header component if it's a custom/user-provided URL
+      // Sample URLs from Meta expire and cause 403 errors — let Meta use the stored template image instead
       const mediaKey = template.headerType.toLowerCase() as "image" | "video" | "document";
       components.push({
         type: "header",
