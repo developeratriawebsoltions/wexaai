@@ -20,18 +20,22 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
+  console.log("[Webhook] Raw body:", JSON.stringify(body, null, 2));
 
   const value = body?.entry?.[0]?.changes?.[0]?.value;
   if (!value) return NextResponse.json({ status: "ok" });
+  console.log("[Webhook] value:", JSON.stringify(value, null, 2));
 
   const phoneNumberId: string = value.metadata?.phone_number_id;
   if (!phoneNumberId) return NextResponse.json({ status: "ok" });
+  console.log("[Webhook] phoneNumberId:", phoneNumberId);
 
   // ── Handle outbound delivery status updates (sent/delivered/read/failed) ──
   // These are NOT new messages — just update existing message status in DB
-  const statuses = value.statuses as Array<{ id: string; status: string }> | undefined;
+  const statuses = value.statuses as Array<{ id: string; status: string; errors?: unknown[] }> | undefined;
   if (statuses?.length) {
     for (const s of statuses) {
+      console.log(`[Webhook] Status update — id: ${s.id}, status: ${s.status}`, s.errors ? `errors: ${JSON.stringify(s.errors)}` : "");
       await prisma.message.updateMany({
         where: { waMessageId: s.id },
         data: { status: s.status },
@@ -42,6 +46,7 @@ export async function POST(req: NextRequest) {
 
   // ── Handle inbound messages ──
   const messages = value.messages as Array<{ type: string; from: string; id: string; text?: { body: string } }> | undefined;
+  console.log("[Webhook] messages:", JSON.stringify(messages, null, 2));
   if (!messages?.length) return NextResponse.json({ status: "ok" });
 
   const account = await prisma.whatsAppAccount.findFirst({
@@ -61,8 +66,12 @@ export async function POST(req: NextRequest) {
   };
 
   for (const m of messages as InboundMessage[]) {
+    console.log("[Webhook] Processing message:", JSON.stringify(m, null, 2));
     // Only handle text and button (template button reply) messages
-    if (m.type !== "text" && m.type !== "button") continue;
+    if (m.type !== "text" && m.type !== "button") {
+      console.log("[Webhook] Skipping unsupported message type:", m.type);
+      continue;
+    }
 
     // Deduplicate
     const existing = await prisma.message.findFirst({ where: { waMessageId: m.id } });

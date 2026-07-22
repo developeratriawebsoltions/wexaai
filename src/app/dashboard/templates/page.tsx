@@ -414,7 +414,10 @@ export default function TemplatesPage() {
                   <label className="text-xs text-gray-500 mb-1 block">Header Type</label>
                   <select value={form.headerType} onChange={e => setForm(f => ({ ...f, headerType: e.target.value, header: "" }))}
                     className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs outline-none focus:border-green-500">
-                    {["TEXT", "IMAGE", "VIDEO", "DOCUMENT"].map(t => <option key={t}>{t}</option>)}
+                    <option value="TEXT">TEXT</option>
+                    <option value="IMAGE" disabled>IMAGE (not supported)</option>
+                    <option value="VIDEO" disabled>VIDEO (not supported)</option>
+                    <option value="DOCUMENT" disabled>DOCUMENT (not supported)</option>
                   </select>
                 </div>
               </div>

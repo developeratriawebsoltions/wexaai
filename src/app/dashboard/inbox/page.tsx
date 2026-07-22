@@ -466,7 +466,7 @@ export default function InboxPage() {
                       >
                         {msg.mediaUrl && (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={msg.mediaUrl} alt="media" className="mb-2 w-full max-w-[260px] rounded-xl object-cover" />
+                          <img src={msg.mediaUrl} alt="media" className="mb-2 w-full max-w-[100px] h-auto rounded-lg object-cover" style={{ aspectRatio: "0.85 / 1" }} />
                         )}
                         <p className="text-sm leading-relaxed pr-12 whitespace-pre-wrap">{msg.text}</p>
                         <div className="absolute bottom-2 right-3 flex items-center gap-1">

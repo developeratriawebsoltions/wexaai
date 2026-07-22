@@ -35,20 +35,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   type MetaParam = { type: string; text?: string; image?: { link: string }; video?: { link: string }; document?: { link: string } };
   const components: { type: string; parameters?: MetaParam[] }[] = [];
 
-  if (template.headerType && template.header) {
-    const headerParam: MetaParam | null =
-      template.headerType === "TEXT"
-        ? { type: "text", text: template.header }
-        : template.headerType === "IMAGE"
-        ? { type: "image", image: { link: template.header } }
-        : template.headerType === "VIDEO"
-        ? { type: "video", video: { link: template.header } }
-        : template.headerType === "DOCUMENT"
-        ? { type: "document", document: { link: template.header } }
-        : null;
+  if (template.headerType) {
+    const isMedia = ["IMAGE", "VIDEO", "DOCUMENT"].includes(template.headerType);
 
-    if (headerParam) {
-      components.push({ type: "header", parameters: [headerParam] });
+    if (isMedia && template.header) {
+      // Always send media header component when header is present, even if it's a sample URL
+      // Meta requires the header component to match the template's defined format
+      const mediaKey = template.headerType.toLowerCase() as "image" | "video" | "document";
+      components.push({
+        type: "header",
+        parameters: [{ type: mediaKey, [mediaKey]: { link: template.header } } as MetaParam],
+      });
+    } else if (template.headerType === "TEXT" && template.header) {
+      components.push({
+        type: "header",
+        parameters: [{ type: "text", text: template.header }],
+      });
     }
   }
 

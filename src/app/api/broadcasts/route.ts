@@ -61,6 +61,13 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  // Fetch template from DB to get correct language
+  const templateRecord = await prisma.template.findFirst({
+    where: { workspaceId, name: templateName },
+    select: { language: true, headerType: true },
+  });
+  const templateLanguage = templateRecord?.language ?? "en";
+
   // Send to each contact via Meta API and save logs
   let sentCount = 0;
   let failedCount = 0;
@@ -77,9 +84,9 @@ export async function POST(req: NextRequest) {
           },
           body: JSON.stringify({
             messaging_product: "whatsapp",
-            to: contact.phone,
+            to: contact.phone.replace(/^\+/, ""),
             type: "template",
-            template: { name: templateName, language: { code: "en" } },
+            template: { name: templateName, language: { code: templateLanguage } },
           }),
         }
       );

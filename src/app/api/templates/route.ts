@@ -70,17 +70,38 @@ export async function POST(req: NextRequest) {
   // Build Meta API components array
   const components: MetaComponent[] = [];
 
-  if (header || headerType) {
-    const isMedia = headerType && ["IMAGE", "VIDEO", "DOCUMENT"].includes(headerType);
-    components.push({
-      type: "HEADER",
-      format: headerType ?? "TEXT",
-      text: !isMedia ? (header || undefined) : undefined,
-      ...(isMedia && header ? { example: { header_url: [header] } } : {}),
-    });
+  if (headerType) {
+    const isMedia = ["IMAGE", "VIDEO", "DOCUMENT"].includes(headerType);
+    if (isMedia) {
+      if (!header) {
+        // Media header without sample URL — skip header component entirely
+        // Meta requires example.header_url, so we cannot create media header without a sample
+        return NextResponse.json(
+          { error: `Please provide a sample ${headerType} URL for the header. Meta requires a sample image/video/document URL when creating media header templates.` },
+          { status: 400 }
+        );
+      }
+      components.push({
+        type: "HEADER",
+        format: headerType,
+        example: { header_url: [header] },
+      });
+    } else {
+      // TEXT header
+      components.push({
+        type: "HEADER",
+        format: "TEXT",
+        ...(header ? { text: header } : {}),
+      });
+    }
   }
 
-  components.push({ type: "BODY", text: body });
+  components.push({ type: "BODY", text: body,
+    // Meta requires body example when header has example
+    ...(headerType && ["IMAGE","VIDEO","DOCUMENT"].includes(headerType) && header
+      ? { example: { body_text: [[]] } }
+      : {}),
+  });
 
   if (footer) {
     components.push({ type: "FOOTER", text: footer });
@@ -99,26 +120,29 @@ export async function POST(req: NextRequest) {
   }
 
   // Submit to Meta
+  const metaBody = {
+    name: name.toLowerCase().replace(/\s+/g, "_"),
+    category: category.toUpperCase(),
+    language,
+    components,
+  };
+  console.log("[Template Create] payload:", JSON.stringify(metaBody, null, 2));
   const metaRes = await fetch(
-    `https://graph.facebook.com/v19.0/${ctx.wa.wabaId}/message_templates`,
+    `https://graph.facebook.com/v21.0/${ctx.wa.wabaId}/message_templates`,
     {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${ctx.wa.accessToken}`,
       },
-      body: JSON.stringify({
-        name: name.toLowerCase().replace(/\s+/g, "_"),
-        category: category.toUpperCase(),
-        language,
-        components,
-      }),
+      body: JSON.stringify(metaBody),
     }
   );
 
   const metaData = await metaRes.json();
 
   if (!metaRes.ok || metaData.error) {
+    console.error("[Template Create] Meta error:", JSON.stringify(metaData, null, 2));
     return NextResponse.json(
       { error: metaData.error?.message ?? "Meta API error" },
       { status: 400 }
