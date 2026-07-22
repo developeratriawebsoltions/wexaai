@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Search, Send, CheckCheck, Check, Clock, RefreshCw,
   MessageSquare, Phone, MoreVertical, Filter, Inbox,
-  ChevronDown, Circle, Smile, Paperclip, ArrowLeft,
+  ChevronDown, Circle, Smile, Paperclip, ArrowLeft, X,
 } from "lucide-react";
 
 function authFetch(url: string, options: RequestInit = {}) {
@@ -90,6 +90,7 @@ export default function InboxPage() {
   const [loadingConvs, setLoadingConvs] = useState(true);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [search, setSearch] = useState("");
+  const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<ConvStatus | "all">("all");
   const [filterOpen, setFilterOpen] = useState(false);
   const [sendError, setSendError] = useState("");
@@ -236,9 +237,9 @@ export default function InboxPage() {
   }, []);
 
   return (
-    <div className="flex h-full overflow-hidden bg-[#f0f2f5]">
+    <div className="flex h-full min-h-0 overflow-hidden bg-[#f0f2f5]">
       {/* Left Panel — Conversation List */}
-      <div className={`flex w-full md:w-[340px] flex-shrink-0 flex-col border-r border-gray-200 bg-white ${
+      <div className={`flex w-full md:w-[340px] min-h-0 flex-shrink-0 flex-col border-r border-gray-200 bg-white ${
         mobileView === "chat" ? "hidden md:flex" : "flex"
       }`}>
         {/* Header */}
@@ -373,7 +374,7 @@ export default function InboxPage() {
 
       {/* Right Panel — Chat View */}
       {activeId && activeConv ? (
-        <div className={`flex flex-1 flex-col overflow-hidden ${
+        <div className={`flex flex-1 min-h-0 flex-col overflow-hidden ${
           mobileView === "list" ? "hidden md:flex" : "flex"
         }`}>
           {/* Chat Header */}
@@ -428,7 +429,7 @@ export default function InboxPage() {
 
           {/* Messages — WhatsApp chat background */}
           <div
-            className="flex-1 overflow-y-auto px-4 py-4 space-y-1"
+            className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-1"
             style={{
               backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23c8d6c8' fill-opacity='0.25'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
               backgroundColor: "#e5ddd5",
@@ -455,24 +456,50 @@ export default function InboxPage() {
                   {msgs.map((msg) => (
                     <div
                       key={msg.id}
-                      className={`flex mb-1 ${msg.direction === "outbound" ? "justify-end" : "justify-start"}`}
+                      className={`relative flex mb-1 ${msg.direction === "outbound" ? "justify-end" : "justify-start"}`}
                     >
                       <div
-                        className={`whatsapp-chat-bubble max-w-[72%] rounded-[22px] px-4 py-3 shadow-sm ${
+                        className={`relative max-w-[72%] shadow-sm overflow-hidden ${
+                          msg.mediaUrl
+                            ? "rounded-[18px] p-0"
+                            : msg.direction === "outbound"
+                            ? "rounded-[18px] rounded-tr-[4px] px-3 py-2"
+                            : "rounded-[18px] rounded-tl-[4px] px-3 py-2"
+                        } ${
                           msg.direction === "outbound"
-                            ? "outbound bg-[#dcf8c6] text-gray-900 rounded-tr-[6px] rounded-bl-[4px] rounded-tl-[22px] rounded-br-[22px]"
-                            : "inbound bg-white text-gray-900 rounded-tl-[6px] rounded-br-[4px] rounded-bl-[22px] rounded-tr-[22px]"
+                            ? "bg-[#dcf8c6] text-gray-900"
+                            : "bg-white text-gray-900"
                         }`}
                       >
-                        {msg.mediaUrl && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={msg.mediaUrl} alt="media" className="mb-2 w-full max-w-[100px] h-auto rounded-lg object-cover" style={{ aspectRatio: "0.85 / 1" }} />
+                        {msg.mediaUrl ? (
+                          // WhatsApp template style: image + caption
+                          <>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={msg.mediaUrl}
+                              alt="media"
+                              onClick={() => setSelectedImageUrl(msg.mediaUrl!)}
+                              className="w-full max-w-[260px] max-h-[260px] object-cover cursor-pointer block"
+                            />
+                            {msg.text && (
+                              <div className="px-3 pt-2 pb-6">
+                                <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                              </div>
+                            )}
+                            <div className="absolute bottom-1.5 right-2.5 flex items-center gap-1">
+                              <span className="text-[10px] text-gray-500">{formatTime(msg.createdAt)}</span>
+                              {msg.direction === "outbound" && <StatusIcon status={msg.status} />}
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-sm leading-relaxed pr-14 whitespace-pre-wrap">{msg.text}</p>
+                            <div className="absolute bottom-1.5 right-2.5 flex items-center gap-1">
+                              <span className="text-[10px] text-gray-500">{formatTime(msg.createdAt)}</span>
+                              {msg.direction === "outbound" && <StatusIcon status={msg.status} />}
+                            </div>
+                          </>
                         )}
-                        <p className="text-sm leading-relaxed pr-12 whitespace-pre-wrap">{msg.text}</p>
-                        <div className="absolute bottom-2 right-3 flex items-center gap-1">
-                          <span className="text-[10px] text-gray-500">{formatTime(msg.createdAt)}</span>
-                          {msg.direction === "outbound" && <StatusIcon status={msg.status} />}
-                        </div>
                       </div>
                     </div>
                   ))}
@@ -481,6 +508,22 @@ export default function InboxPage() {
             )}
             <div ref={bottomRef} />
           </div>
+
+          {selectedImageUrl && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+              <div className="relative max-h-full w-full max-w-4xl overflow-hidden rounded-3xl bg-white shadow-2xl">
+                <button
+                  onClick={() => setSelectedImageUrl(null)}
+                  className="absolute right-4 top-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-gray-600 shadow-sm transition hover:bg-gray-100"
+                  aria-label="Close image preview"
+                >
+                  <X size={20} />
+                </button>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={selectedImageUrl} alt="Preview" className="max-h-[85vh] w-full object-contain" />
+              </div>
+            </div>
+          )}
 
           {/* Reply Box */}
           <div className="bg-[#e5ddd5] px-4 py-3 border-t border-[#d6d6d6]">
