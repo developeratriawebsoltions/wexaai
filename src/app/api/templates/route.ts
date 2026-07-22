@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "name, category and body are required" }, { status: 400 });
   }
 
-  type MetaComponent = { type: string; format?: string; text?: string; example?: { header_url?: string[] }; buttons?: unknown[] };
+  type MetaComponent = { type: string; format?: string; text?: string; example?: { header_url?: string[]; body_text?: string[][] }; buttons?: unknown[] };
   // Build Meta API components array
   const components: MetaComponent[] = [];
 
