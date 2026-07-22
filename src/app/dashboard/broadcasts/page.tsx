@@ -28,6 +28,8 @@ type Template = {
   name: string;
   body: string;
   status: string;
+  headerType?: string | null;
+  header?: string | null;
 };
 
 type Contact = {
@@ -63,6 +65,7 @@ export default function BroadcastsPage() {
   const [campaignName, setCampaignName] = useState("");
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const [headerUrl, setHeaderUrl] = useState("");
   const [audience, setAudience] = useState("all");
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [contactSearch, setContactSearch] = useState("");
@@ -112,6 +115,14 @@ export default function BroadcastsPage() {
   useEffect(() => { fetchBroadcasts(); }, []);
 
   useEffect(() => {
+    if (!selectedTemplate || selectedTemplate.headerType !== "IMAGE") {
+      setHeaderUrl("");
+      return;
+    }
+    setHeaderUrl(selectedTemplate.header ?? "");
+  }, [selectedTemplate]);
+
+  useEffect(() => {
     if (showWizard && step === 2) {
       fetchContacts(contactSearch);
     }
@@ -121,6 +132,7 @@ export default function BroadcastsPage() {
     setStep(0);
     setCampaignName("");
     setSelectedTemplate(null);
+    setHeaderUrl("");
     setAudience("all");
     setContactSearch("");
     setSelectedContactIds([]);
@@ -154,6 +166,7 @@ export default function BroadcastsPage() {
           templateName: selectedTemplate!.name,
           audience,
           contactIds: audience === "selected" ? selectedContactIds : undefined,
+          headerUrl: selectedTemplate?.headerType === "IMAGE" ? headerUrl.trim() || undefined : undefined,
         }),
       });
       const data = await res.json();
@@ -361,6 +374,19 @@ export default function BroadcastsPage() {
                           <p className="mt-0.5 text-[11px] text-gray-400 line-clamp-2">{t.body}</p>
                         </button>
                       ))}
+                    </div>
+                  )}
+
+                  {selectedTemplate?.headerType === "IMAGE" && (
+                    <div className="mt-3">
+                      <label className="mb-1.5 block text-xs font-medium text-gray-600">Header Image URL (optional)</label>
+                      <input
+                        value={headerUrl}
+                        onChange={(e) => setHeaderUrl(e.target.value)}
+                        placeholder="https://your-public-domain.com/image.jpg"
+                        className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-green-500"
+                      />
+                      <p className="mt-1 text-[11px] text-gray-400">Use a permanent public image URL for the template header.</p>
                     </div>
                   )}
                 </div>

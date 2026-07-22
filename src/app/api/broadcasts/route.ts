@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   const workspaceId = await getWorkspaceId(user.id);
   if (!workspaceId) return NextResponse.json({ error: "No workspace" }, { status: 404 });
 
-  const { campaignName, templateName, audience, contactIds } = await req.json();
+  const { campaignName, templateName, audience, contactIds, headerUrl } = await req.json();
   if (!campaignName || !templateName) {
     return NextResponse.json({ error: "campaignName and templateName are required" }, { status: 400 });
   }
@@ -61,10 +61,10 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // Fetch template from DB to get correct language
+  // Fetch template from DB to get correct language and header info
   const templateRecord = await prisma.template.findFirst({
     where: { workspaceId, name: templateName },
-    select: { language: true, headerType: true },
+    select: { language: true, headerType: true, header: true },
   });
   const templateLanguage = templateRecord?.language ?? "en";
 
@@ -74,6 +74,19 @@ export async function POST(req: NextRequest) {
 
   for (const contact of contacts) {
     try {
+      const components: Array<{ type: string; parameters?: Array<{ type: string; image?: { link: string } }> }> = [];
+
+      if (templateRecord?.headerType === "IMAGE") {
+        const mediaLink = headerUrl || templateRecord.header;
+        if (!mediaLink) {
+          throw new Error("Please provide a header URL for this image template");
+        }
+        components.push({
+          type: "header",
+          parameters: [{ type: "image", image: { link: mediaLink } }],
+        });
+      }
+
       const res = await fetch(
         `https://graph.facebook.com/v19.0/${wa.phoneNumberId}/messages`,
         {
@@ -86,7 +99,11 @@ export async function POST(req: NextRequest) {
             messaging_product: "whatsapp",
             to: contact.phone.replace(/^\+/, ""),
             type: "template",
-            template: { name: templateName, language: { code: templateLanguage } },
+            template: {
+              name: templateName,
+              language: { code: templateLanguage },
+              ...(components.length ? { components } : {}),
+            },
           }),
         }
       );
