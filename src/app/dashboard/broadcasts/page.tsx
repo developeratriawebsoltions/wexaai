@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Search, Bell, Eye, X, Send, Loader2, ChevronRight, ChevronLeft, Radio } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Search, Bell, Eye, X, Send, Loader2, ChevronRight, ChevronLeft, Radio, Upload } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
 type Broadcast = {
@@ -73,6 +73,9 @@ export default function BroadcastsPage() {
   const [contactsLoading, setContactsLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [wizardError, setWizardError] = useState("");
+  const [uploadingHeader, setUploadingHeader] = useState(false);
+  const [canSendHeader, setCanSendHeader] = useState(true);
+  const headerFileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Detail modal
   const [detail, setDetail] = useState<(Broadcast & { logs: BroadcastLog[] }) | null>(null);
@@ -117,9 +120,11 @@ export default function BroadcastsPage() {
   useEffect(() => {
     if (!selectedTemplate || selectedTemplate.headerType !== "IMAGE") {
       setHeaderUrl("");
+      setCanSendHeader(true);
       return;
     }
     setHeaderUrl(selectedTemplate.header ?? "");
+    setCanSendHeader(Boolean(selectedTemplate.header));
   }, [selectedTemplate]);
 
   useEffect(() => {
@@ -151,6 +156,32 @@ export default function BroadcastsPage() {
       return;
     }
     setStep((s) => s + 1);
+  };
+
+  const handleHeaderUpload = async (file: File | null) => {
+    if (!file || !token) return;
+    setUploadingHeader(true);
+    setWizardError("");
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Upload failed");
+      setHeaderUrl(data.url ?? "");
+      setCanSendHeader(true);
+    } catch (err: any) {
+      setWizardError(err?.message ?? "Upload failed");
+    } finally {
+      setUploadingHeader(false);
+    }
   };
 
   const handleSend = async () => {
@@ -380,13 +411,40 @@ export default function BroadcastsPage() {
                   {selectedTemplate?.headerType === "IMAGE" && (
                     <div className="mt-3">
                       <label className="mb-1.5 block text-xs font-medium text-gray-600">Header Image URL (optional)</label>
-                      <input
-                        value={headerUrl}
-                        onChange={(e) => setHeaderUrl(e.target.value)}
-                        placeholder="https://your-public-domain.com/image.jpg"
-                        className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-green-500"
-                      />
-                      <p className="mt-1 text-[11px] text-gray-400">Use a permanent public image URL for the template header.</p>
+                      <div className="flex items-center gap-2">
+                        <input
+                          value={headerUrl}
+                          onChange={(e) => {
+                            setHeaderUrl(e.target.value);
+                            setCanSendHeader(Boolean(e.target.value.trim()));
+                          }}
+                          placeholder="https://your-public-domain.com/image.jpg"
+                          className="flex-1 rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-green-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => headerFileInputRef.current?.click()}
+                          disabled={uploadingHeader}
+                          className="flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-2 text-[11px] text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+                        >
+                          {uploadingHeader ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                          Upload
+                        </button>
+                        <input
+                          ref={headerFileInputRef}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0] ?? null;
+                            if (file) handleHeaderUpload(file);
+                            e.target.value = "";
+                          }}
+                        />
+                      </div>
+                      <p className="mt-2 rounded-md border-2 border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
+                        Note: Upload an image before sending.
+                      </p>
                     </div>
                   )}
                 </div>
@@ -528,7 +586,7 @@ export default function BroadcastsPage() {
               ) : (
                 <button
                   onClick={handleSend}
-                  disabled={sending}
+                  disabled={sending || (selectedTemplate?.headerType === "IMAGE" && !canSendHeader)}
                   className="flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-60"
                 >
                   {sending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}

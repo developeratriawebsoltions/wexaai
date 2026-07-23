@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Search, Send, CheckCheck, Check, Clock, RefreshCw,
   MessageSquare, Phone, MoreVertical, Filter, Inbox,
-  ChevronDown, Circle, Smile, Paperclip, ArrowLeft, X, LayoutTemplate,
+  ChevronDown, Circle, Smile, Paperclip, ArrowLeft, X, LayoutTemplate, Upload,
 } from "lucide-react";
 
 function authFetch(url: string, options: RequestInit = {}) {
@@ -124,6 +124,9 @@ export default function InboxPage() {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [templateSearch, setTemplateSearch] = useState("");
   const [sendingTemplate, setSendingTemplate] = useState(false);
+  const [uploadingTemplateId, setUploadingTemplateId] = useState<string | null>(null);
+  const [templateHeaderUrls, setTemplateHeaderUrls] = useState<Record<string, string>>({});
+  const uploadTemplateFileRef = useRef<HTMLInputElement | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -254,11 +257,20 @@ export default function InboxPage() {
 
   const handleSendTemplate = async (t: Template) => {
     if (!activeId || !activeConv || sendingTemplate) return;
+    const headerUrl = t.headerType === "IMAGE" ? (templateHeaderUrls[t.id] ?? t.header ?? "") : "";
+    if (t.headerType === "IMAGE" && !headerUrl) {
+      setSendError("Upload an image before sending this template.");
+      return;
+    }
+
     setSendingTemplate(true);
     setSendError("");
     const res = await authFetch(`/api/templates/${t.id}`, {
       method: "POST",
-      body: JSON.stringify({ contactId: activeConv.contactId }),
+      body: JSON.stringify({
+        contactId: activeConv.contactId,
+        headerUrl: t.headerType === "IMAGE" ? headerUrl : undefined,
+      }),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -273,7 +285,7 @@ export default function InboxPage() {
         createdAt: new Date().toISOString(),
         from: "me",
         messageType: "template",
-        mediaUrl: t.headerType === "IMAGE" ? (t.header ?? null) : null,
+        mediaUrl: t.headerType === "IMAGE" ? (headerUrl || null) : null,
         templateButtons: t.buttons ?? null,
       };
       setMessages((prev) => [...prev, bubble]);
@@ -285,6 +297,29 @@ export default function InboxPage() {
       setShowTemplates(false);
     }
     setSendingTemplate(false);
+  };
+
+  const handleUploadTemplateImage = async (file: File, templateId: string) => {
+    if (!activeId || !file) return;
+    setUploadingTemplateId(templateId);
+    setSendError("");
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Upload failed");
+      setTemplateHeaderUrls((prev) => ({ ...prev, [templateId]: data.url ?? "" }));
+    } catch (err: any) {
+      setSendError(err?.message ?? "Upload failed");
+    } finally {
+      setUploadingTemplateId(null);
+    }
   };
 
   const emojiList = ["😀","😃","😄","😁","😆","😊","😇","🙂","🙃","😉","😍","😘","😜","🤔","😴","🤖","👍","👎","👏","🙏","🔥","🎉","❤️"];
@@ -719,73 +754,7 @@ export default function InboxPage() {
             </div>
           )}
 
-          {/* Template Picker */}
-          {showTemplates && (
-            <div className="bg-white border-t border-gray-200 shadow-lg max-h-80 flex flex-col">
-              <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100">
-                <span className="text-xs font-semibold text-gray-700">Templates</span>
-                <button onClick={() => setShowTemplates(false)} className="text-gray-400 hover:text-gray-600"><X size={14} /></button>
-              </div>
-              <div className="px-3 py-2 border-b border-gray-100">
-                <input
-                  value={templateSearch}
-                  onChange={(e) => setTemplateSearch(e.target.value)}
-                  placeholder="Search templates..."
-                  className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs outline-none focus:border-green-500"
-                />
-              </div>
-              <div className="flex-1 overflow-y-auto p-2 space-y-2">
-                {templates
-                  .filter((t) => t.name.toLowerCase().includes(templateSearch.toLowerCase()))
-                  .map((t) => (
-                    <button
-                      key={t.id}
-                      onClick={() => handleSendTemplate(t)}
-                      disabled={sendingTemplate}
-                      className="w-full text-left rounded-xl border border-gray-200 overflow-hidden hover:border-green-400 hover:shadow-sm transition disabled:opacity-60"
-                    >
-                      {/* WhatsApp-style preview */}
-                      <div className="bg-[#e5ddd5] px-3 py-2">
-                        <div className="ml-auto max-w-[85%] rounded-lg bg-white shadow-sm overflow-hidden">
-                          {t.headerType === "IMAGE" && t.header ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={t.header} alt="header" className="w-full h-20 object-cover" />
-                          ) : t.header ? (
-                            <div className="px-2 pt-2 pb-0.5">
-                              <p className="text-[11px] font-bold text-gray-800">{t.header}</p>
-                            </div>
-                          ) : null}
-                          <div className="px-2 pt-1.5 pb-1">
-                            <p className="text-[11px] text-gray-800 leading-relaxed line-clamp-3 whitespace-pre-line">{t.body}</p>
-                          </div>
-                          {t.footer && (
-                            <div className="px-2 pb-1">
-                              <p className="text-[10px] text-gray-400">{t.footer}</p>
-                            </div>
-                          )}
-                          {t.buttons && t.buttons.length > 0 && (
-                            <div className="border-t border-gray-100">
-                              {t.buttons.map((b, i) => (
-                                <div key={i} className={`flex items-center justify-center gap-1 py-1.5 text-[11px] font-medium text-[#00a884] ${i < t.buttons!.length - 1 ? "border-b border-gray-100" : ""}` }>
-                                  {b.text}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <div className="px-3 py-1.5 bg-white flex items-center justify-between">
-                        <span className="text-[11px] font-semibold text-gray-700">{t.name}</span>
-                        <span className="text-[10px] text-gray-400">{t.category}</span>
-                      </div>
-                    </button>
-                  ))}
-                {templates.filter((t) => t.name.toLowerCase().includes(templateSearch.toLowerCase())).length === 0 && (
-                  <p className="text-center text-xs text-gray-400 py-4">No approved templates found</p>
-                )}
-              </div>
-            </div>
-          )}
+
 
           {/* Reply Box */}
           <div className="bg-[#e5ddd5] px-2 sm:px-4 py-2 sm:py-3 border-t border-[#d6d6d6]">
@@ -809,15 +778,6 @@ export default function InboxPage() {
                   </div>
                 )}
               </div>
-              <button
-                onClick={() => { setShowTemplates((v) => !v); if (!templates.length) fetchTemplates(); }}
-                className={`shrink-0 p-1.5 sm:p-2 rounded-full transition-colors hover:bg-gray-100 ${
-                  showTemplates ? "text-green-600 bg-green-50" : "text-gray-500 hover:text-gray-700"
-                }`}
-                title="Send Template"
-              >
-                <LayoutTemplate size={18} className="sm:w-5 sm:h-5" />
-              </button>
               <>
                 <button
                   onClick={() => fileRef.current?.click()}

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { Search, Bell, RefreshCw, Trash2, Plus, X, Loader2, Send } from "lucide-react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { Search, Bell, RefreshCw, Trash2, Plus, X, Loader2, Send, Upload } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
 interface Template {
@@ -62,6 +62,10 @@ export default function TemplatesPage() {
   const [headerUrl, setHeaderUrl] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
+  const [uploadingHeader, setUploadingHeader] = useState(false);
+  const [canSendWithHeader, setCanSendWithHeader] = useState(true);
+  const sendFileInputRef = useRef<HTMLInputElement | null>(null);
+  const createFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const fetchTemplates = useCallback(async () => {
     if (!token) return;
@@ -152,6 +156,7 @@ export default function TemplatesPage() {
     setContactSearch("");
     setContacts([]);
     setSendError("");
+    setCanSendWithHeader(t.headerType !== "IMAGE" || Boolean(t.header));
     setSendTemplate(t);
   }
 
@@ -167,6 +172,39 @@ export default function TemplatesPage() {
   useEffect(() => {
     if (sendTemplate) fetchContacts(contactSearch);
   }, [contactSearch, sendTemplate, fetchContacts]);
+
+  async function handleHeaderUpload(file: File | null, target: "send" | "create" = "send") {
+    if (!file || !token) return;
+    setUploadingHeader(true);
+    if (target === "send") setSendError("");
+    else setError("");
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Upload failed");
+
+      if (target === "send") {
+        setHeaderUrl(data.url ?? "");
+        setCanSendWithHeader(true);
+      } else {
+        setForm((f) => ({ ...f, header: data.url ?? "" }));
+      }
+    } catch (err: any) {
+      if (target === "send") setSendError(err?.message ?? "Upload failed");
+      else setError(err?.message ?? "Upload failed");
+    } finally {
+      setUploadingHeader(false);
+    }
+  }
 
   async function handleSend() {
     if (!token || !sendTemplate || !selectedContact) return;
@@ -389,10 +427,37 @@ export default function TemplatesPage() {
               {sendTemplate.headerType === "IMAGE" && (
                 <div>
                   <label className="text-xs text-gray-500 mb-1 block">Header URL (optional)</label>
-                  <input value={headerUrl} onChange={e => setHeaderUrl(e.target.value)}
-                    placeholder="https://your-public-domain.com/image.jpg"
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs outline-none focus:border-green-500" />
-                  <p className="mt-1 text-[11px] text-gray-400">Use a permanent public URL for the image header.</p>
+                  <div className="flex items-center gap-2">
+                    <input value={headerUrl} onChange={e => {
+                      setHeaderUrl(e.target.value);
+                      setCanSendWithHeader(Boolean(e.target.value.trim()));
+                    }}
+                      placeholder="https://your-public-domain.com/image.jpg"
+                      className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-xs outline-none focus:border-green-500" />
+                    <button
+                      type="button"
+                      onClick={() => sendFileInputRef.current?.click()}
+                      disabled={uploadingHeader}
+                      className="flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-2 text-[11px] text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+                    >
+                      {uploadingHeader ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                      Upload
+                    </button>
+                    <input
+                      ref={sendFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] ?? null;
+                        if (file) handleHeaderUpload(file, "send");
+                        e.target.value = "";
+                      }}
+                    />
+                  </div>
+                  <p className="mt-2 rounded-md border-2 border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
+                    Note: Upload an image before sending.
+                  </p>
                 </div>
               )}
 
@@ -414,7 +479,7 @@ export default function TemplatesPage() {
             <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-100">
               <button onClick={() => setSendTemplate(null)}
                 className="rounded-lg border border-gray-200 px-4 py-2 text-xs text-gray-600 hover:bg-gray-50">Cancel</button>
-              <button onClick={handleSend} disabled={sending || !selectedContact}
+              <button onClick={handleSend} disabled={sending || !selectedContact || (sendTemplate?.headerType === "IMAGE" && !canSendWithHeader)}
                 className="flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-60">
                 {sending && <Loader2 size={12} className="animate-spin" />}
                 {sending ? "Sending..." : "Send"}
@@ -463,17 +528,30 @@ export default function TemplatesPage() {
                   <label className="text-xs text-gray-500 mb-1 block">
                     {form.headerType === "TEXT" ? "Header Text (optional)" : form.headerType === "IMAGE" ? "Header Image URL (optional)" : `Header ${form.headerType} URL (optional)`}
                   </label>
-                  <input value={form.header} onChange={e => setForm(f => ({ ...f, header: e.target.value }))}
-                    placeholder={form.headerType === "TEXT" ? "Header text" : form.headerType === "IMAGE" ? "https://example.com/image.jpg (sample)" : "https://example.com/file"}
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs outline-none focus:border-green-500" />
-                  {form.headerType === "IMAGE" && <p className="mt-1 text-[11px] text-gray-400">Note: You can provide a sample URL. Actual image is sent per message.</p>}
+                  <div className="flex items-center gap-2">
+                    <input value={form.header} onChange={e => setForm(f => ({ ...f, header: e.target.value }))}
+                      placeholder={form.headerType === "TEXT" ? "Header text" : form.headerType === "IMAGE" ? "https://example.com/image.jpg or Cloudinary URL" : "https://example.com/file"}
+                      className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-xs outline-none focus:border-green-500" />
+                    {form.headerType === "IMAGE" && (
+                      <>
+                        <button type="button" onClick={() => createFileInputRef.current?.click()} disabled={uploadingHeader}
+                          className="flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-2 text-[11px] text-gray-600 hover:bg-gray-50 disabled:opacity-60">
+                          {uploadingHeader ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                          Upload
+                        </button>
+                        <input ref={createFileInputRef} type="file" accept="image/*" className="hidden"
+                          onChange={(e) => { const file = e.target.files?.[0] ?? null; if (file) handleHeaderUpload(file, "create"); e.target.value = ""; }} />
+                      </>
+                    )}
+                  </div>
+                  {form.headerType === "IMAGE" && <p className="mt-1 text-[11px] text-gray-400">You can paste a public image URL or upload an image; the uploaded file will be stored in Cloudinary and used for sending.</p>}
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 mb-1 block">Header Type</label>
                   <select value={form.headerType} onChange={e => setForm(f => ({ ...f, headerType: e.target.value, header: "" }))}
                     className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs outline-none focus:border-green-500">
                     <option value="TEXT">TEXT</option>
-                    <option value="IMAGE" disabled>IMAGE (not supported)</option>
+                    <option value="IMAGE">IMAGE</option>
                     <option value="VIDEO" disabled>VIDEO (not supported)</option>
                     <option value="DOCUMENT" disabled>DOCUMENT (not supported)</option>
                   </select>
