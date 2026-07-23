@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { CheckCircle2, ArrowRight } from "lucide-react";
+import Navbar from "@/components/layout/Navbar";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -45,6 +46,7 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ email, password }),
       });
       const data = await res.json();
@@ -94,39 +96,11 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex">
-      {/* Left Panel */}
-      <div className="hidden lg:flex lg:w-1/2 hero-bg flex-col justify-between p-12">
-        <div>
-          <span className="text-2xl font-bold text-green-600" style={{ fontFamily: "Sora, sans-serif" }}>
-            Wexa AI
-          </span>
-        </div>
-        <div>
-          <h2 className="text-4xl font-extrabold leading-tight text-zinc-900" style={{ fontFamily: "Sora, sans-serif" }}>
-            Welcome back to<br />
-            <span className="gradient-text">Wexa AI</span>
-          </h2>
-          <p className="mt-4 text-zinc-500 text-base max-w-sm">
-            Manage your inbox, contacts, campaigns, and AI assistant — all in one place.
-          </p>
-          <ul className="mt-8 space-y-3">
-            {["AI-powered auto replies", "Shared team inbox", "WhatsApp broadcasts"].map((item) => (
-              <li key={item} className="flex items-center gap-3 text-sm text-zinc-600">
-                <CheckCircle2 size={18} className="text-green-600 shrink-0" />
-                {item}
-              </li>
-            ))}
-          </ul>
-        </div>
-        <p className="text-xs text-zinc-400">© {new Date().getFullYear()} Wexa AI. All rights reserved.</p>
-      </div>
-
-      {/* Right Panel */}
-      <div className="flex-1 flex items-center justify-center px-6 py-12 bg-white">
-        <div className="w-full max-w-md">
-          {/* Mobile logo */}
-          <div className="lg:hidden mb-8">
+    <div className="min-h-screen bg-slate-50">
+      <Navbar />
+      <main className="flex min-h-[calc(100vh-80px)] items-center justify-center px-6 py-12">
+        <div className="w-full max-w-md rounded-[32px] border border-zinc-200/70 bg-white shadow-2xl p-8 lg:p-12">
+          <div className="mb-8 text-center lg:hidden">
             <span className="text-2xl font-bold text-green-600" style={{ fontFamily: "Sora, sans-serif" }}>Wexa AI</span>
           </div>
 
@@ -277,7 +251,7 @@ export default function LoginPage() {
             </>
           )}
         </div>
-      </div>
+      </main>
     </div>
   );
 }

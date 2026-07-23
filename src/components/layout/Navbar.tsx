@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 const navLinks = [
   { name: "Features", href: "#features" },
@@ -13,21 +15,24 @@ const navLinks = [
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
+  const { user, loading, logout } = useAuth();
+
+  const isLoggedIn = !loading && !!user;
 
   return (
     <header className="sticky top-0 z-50 border-b border-zinc-200/60 bg-white/80 backdrop-blur-xl">
       <div className="container flex h-20 items-center justify-between">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-600 text-lg font-bold text-white">
-            W
-          </div>
-
-          <div>
-            <h2 className="text-xl font-bold tracking-tight">
-              Wexa <span className="text-green-600">AI</span>
-            </h2>
-          </div>
+          <Image
+            src="/logo/wexaai.png"
+            alt="Wexa AI Logo"
+            width={140}
+            height={50}
+            priority
+            className="h-auto w-auto max-w-xs"
+            style={{ maxWidth: '140px', height: 'auto' }}
+          />
         </Link>
 
         {/* Desktop Navigation */}
@@ -36,7 +41,7 @@ export default function Navbar() {
             <Link
               key={item.name}
               href={item.href}
-              className="text-sm font-medium text-zinc-600 transition hover:text-green-600"
+              className="text-base font-bold text-zinc-600 transition hover:text-green-600"
             >
               {item.name}
             </Link>
@@ -45,19 +50,37 @@ export default function Navbar() {
 
         {/* Desktop Buttons */}
         <div className="hidden items-center gap-4 lg:flex">
-          <Link
-            href="/login"
-            className="text-sm font-semibold text-zinc-700 transition hover:text-green-600"
-          >
-            Login
-          </Link>
-
-          <Link
-            href="/signup"
-            className="rounded-xl bg-green-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-green-700"
-          >
-            Start Free
-          </Link>
+          {isLoggedIn ? (
+            <>
+              <Link
+                href="/dashboard/inbox"
+                className="text-base font-bold text-zinc-700 transition hover:text-green-600"
+              >
+                Dashboard
+              </Link>
+              <button
+                onClick={logout}
+                className="rounded-xl bg-green-600 px-5 py-3 text-base font-bold text-white transition hover:bg-green-700"
+              >
+                Logout
+              </button>
+            </>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className="text-base font-bold text-zinc-700 transition hover:text-green-600"
+              >
+                Login
+              </Link>
+              <Link
+                href="/signup"
+                className="rounded-xl bg-green-600 px-5 py-3 text-base font-bold text-white transition hover:bg-green-700"
+              >
+                Start Free
+              </Link>
+            </>
+          )}
         </div>
 
         {/* Mobile Button */}
@@ -78,26 +101,47 @@ export default function Navbar() {
                 key={item.name}
                 href={item.href}
                 onClick={() => setIsOpen(false)}
-                className="py-4 text-base font-medium text-zinc-700 transition hover:text-green-600"
+                className="py-4 text-lg font-bold text-zinc-700 transition hover:text-green-600"
               >
                 {item.name}
               </Link>
             ))}
 
             <div className="mt-6 flex flex-col gap-3">
-              <Link
-                href="/login"
-                className="rounded-xl border border-zinc-300 px-4 py-3 text-center font-medium"
-              >
-                Login
-              </Link>
-
-              <Link
-                href="/signup"
-                className="rounded-xl bg-green-600 px-4 py-3 text-center font-semibold text-white hover:bg-green-700"
-              >
-                Start Free
-              </Link>
+              {isLoggedIn ? (
+                <>
+                  <Link
+                    href="/dashboard/inbox"
+                    onClick={() => setIsOpen(false)}
+                    className="rounded-xl border border-zinc-300 px-4 py-3 text-center font-bold text-lg"
+                  >
+                    Dashboard
+                  </Link>
+                  <button
+                    onClick={() => { setIsOpen(false); logout(); }}
+                    className="rounded-xl bg-green-600 px-4 py-3 text-center font-bold text-lg text-white hover:bg-green-700"
+                  >
+                    Logout
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link
+                    href="/login"
+                    onClick={() => setIsOpen(false)}
+                    className="rounded-xl border border-zinc-300 px-4 py-3 text-center font-bold text-lg"
+                  >
+                    Login
+                  </Link>
+                  <Link
+                    href="/signup"
+                    onClick={() => setIsOpen(false)}
+                    className="rounded-xl bg-green-600 px-4 py-3 text-center font-bold text-lg text-white hover:bg-green-700"
+                  >
+                    Start Free
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>

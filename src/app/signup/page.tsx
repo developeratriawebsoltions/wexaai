@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { CheckCircle2, ArrowRight, Mail } from "lucide-react";
+import Navbar from "@/components/layout/Navbar";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -79,37 +80,11 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen flex">
-      {/* Left Panel */}
-      <div className="hidden lg:flex lg:w-1/2 hero-bg flex-col justify-between p-12">
-        <span className="text-2xl font-bold text-green-600" style={{ fontFamily: "Sora, sans-serif" }}>
-          Wexa AI
-        </span>
-        <div>
-          <h2 className="text-4xl font-extrabold leading-tight text-zinc-900" style={{ fontFamily: "Sora, sans-serif" }}>
-            Automate your<br />
-            <span className="gradient-text">WhatsApp Business</span><br />
-            with AI
-          </h2>
-          <p className="mt-4 text-zinc-500 text-base max-w-sm">
-            Broadcasts, AI replies, shared inbox, and campaigns — all from one powerful dashboard.
-          </p>
-          <ul className="mt-8 space-y-3">
-            {["No credit card required", "5-minute setup", "24/7 AI support"].map((item) => (
-              <li key={item} className="flex items-center gap-3 text-sm text-zinc-600">
-                <CheckCircle2 size={18} className="text-green-600 shrink-0" />
-                {item}
-              </li>
-            ))}
-          </ul>
-        </div>
-        <p className="text-xs text-zinc-400">© {new Date().getFullYear()} Wexa AI. All rights reserved.</p>
-      </div>
-
-      {/* Right Panel */}
-      <div className="flex-1 flex items-center justify-center px-6 py-12 bg-white">
-        <div className="w-full max-w-md">
-          <div className="lg:hidden mb-8">
+    <div className="min-h-screen bg-slate-50">
+      <Navbar />
+      <main className="flex min-h-[calc(100vh-80px)] items-center justify-center px-6 py-12">
+        <div className="w-full max-w-md rounded-[32px] border border-zinc-200/70 bg-white shadow-2xl p-8 lg:p-12">
+          <div className="mb-8 text-center lg:hidden">
             <span className="text-2xl font-bold text-green-600" style={{ fontFamily: "Sora, sans-serif" }}>Wexa AI</span>
           </div>
 
@@ -125,7 +100,7 @@ export default function SignupPage() {
               <p className="mt-2 text-sm text-zinc-500">Start your free trial. No credit card needed.</p>
 
               <form className="mt-8 space-y-5" onSubmit={handleContinue}>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="flex flex-col gap-1.5">
                     <label className="text-sm font-medium text-zinc-700">Business name</label>
                     <input
@@ -253,7 +228,7 @@ export default function SignupPage() {
             </>
           )}
         </div>
-      </div>
+      </main>
     </div>
   );
 }

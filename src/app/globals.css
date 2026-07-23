@@ -134,9 +134,9 @@ img {
 
 .container {
   width: 100%;
-  max-width: 1280px;
+  max-width: 1920px;
   margin-inline: auto;
-  padding-inline: 1.5rem;
+  padding-inline: clamp(1.5rem, 5vw, 4rem);
 }
 
 .section {
@@ -220,9 +220,30 @@ img {
   -webkit-text-fill-color: transparent;
 }
 
+.animate-fade-up {
+  animation: fade-up 0.75s ease-out both;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .hero-bg {
+  width: 100vw;
+  position: relative;
+  left: 50%;
+  right: 50%;
+  margin-left: -50vw;
+  margin-right: -50vw;
   background:
-    radial-gradient(circle at top left, rgba(34,197,94,.12), transparent 30%),
-    radial-gradient(circle at top right, rgba(34,197,94,.10), transparent 25%),
+    radial-gradient(circle at 5% 20%, rgba(34,197,94,.12), transparent 35%),
+    radial-gradient(circle at 95% 15%, rgba(34,197,94,.10), transparent 30%),
     #ffffff;
 }

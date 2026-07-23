@@ -239,28 +239,28 @@ export default function InboxPage() {
   return (
     <div className="flex h-full min-h-0 overflow-hidden bg-[#f0f2f5]">
       {/* Left Panel — Conversation List */}
-      <div className={`flex w-full md:w-[340px] min-h-0 flex-shrink-0 flex-col border-r border-gray-200 bg-white ${
+      <div className={`flex w-full sm:w-72 md:w-80 min-h-0 flex-shrink-0 flex-col border-r border-gray-200 bg-white ${
         mobileView === "chat" ? "hidden md:flex" : "flex"
       }`}>
         {/* Header */}
-        <div className="border-b border-gray-100 px-4 py-4">
+        <div className="border-b border-gray-100 px-3 sm:px-4 py-3 sm:py-4">
           <div className="relative flex items-center justify-between">
-            <h1 className="text-lg font-bold text-gray-900">Inbox</h1>
+            <h1 className="text-lg sm:text-2xl font-extrabold text-gray-900">Inbox</h1>
             <div className="relative flex items-center gap-1">
               <button
                 onClick={fetchConversations}
                 className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
               >
-                <RefreshCw size={15} />
+                <RefreshCw size={16} className="sm:w-4 sm:h-4" />
               </button>
               <button
                 onClick={() => setFilterOpen((open) => !open)}
                 className={`rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 ${filterOpen ? "bg-gray-100 text-gray-700" : ""}`}
               >
-                <Filter size={15} />
+                <Filter size={16} className="sm:w-4 sm:h-4" />
               </button>
               {filterOpen && (
-                <div className="absolute right-0 top-full z-10 mt-2 w-44 rounded-2xl border border-gray-200 bg-white p-2 shadow-lg">
+                <div className="absolute right-0 top-full z-10 mt-2 w-40 sm:w-44 rounded-2xl border border-gray-200 bg-white p-2 shadow-lg">
                   <div className="space-y-1">
                     {STATUS_TABS.map((tab) => (
                       <button
@@ -269,7 +269,7 @@ export default function InboxPage() {
                           setStatusFilter(tab.value);
                           setFilterOpen(false);
                         }}
-                        className={`w-full rounded-xl px-3 py-2 text-left text-sm font-medium transition-colors ${
+                        className={`w-full rounded-xl px-2 sm:px-3 py-2 text-xs sm:text-sm font-bold transition-colors ${
                           statusFilter === tab.value
                             ? "bg-green-50 text-green-700"
                             : "text-gray-600 hover:bg-gray-100"
@@ -285,23 +285,23 @@ export default function InboxPage() {
           </div>
 
           {/* Search */}
-          <div className="mt-3 flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-            <Search size={14} className="text-gray-400" />
+          <div className="mt-3 flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 sm:px-3 py-2">
+            <Search size={16} className="text-gray-400 flex-shrink-0" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search conversations..."
-              className="flex-1 bg-transparent text-sm outline-none placeholder:text-gray-400"
+              placeholder="Search..."
+              className="flex-1 bg-transparent text-sm sm:text-base font-semibold outline-none placeholder:text-gray-400"
             />
           </div>
 
           {/* Status Tabs */}
-          <div className="mt-3 flex gap-1">
+          <div className="mt-3 flex gap-1 overflow-x-auto pb-1">
             {STATUS_TABS.map((tab) => (
               <button
                 key={tab.value}
                 onClick={() => setStatusFilter(tab.value)}
-                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                className={`rounded-lg px-2 sm:px-2.5 py-1 text-xs font-medium transition-colors whitespace-nowrap ${
                   statusFilter === tab.value
                     ? "bg-green-600 text-white"
                     : "text-gray-500 hover:bg-gray-100"
@@ -320,46 +320,46 @@ export default function InboxPage() {
               <div className="h-6 w-6 animate-spin rounded-full border-2 border-green-600 border-t-transparent" />
             </div>
           ) : conversations.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Inbox size={36} className="mb-3 text-gray-300" />
-              <p className="text-sm font-medium text-gray-500">No conversations yet</p>
-              <p className="mt-1 text-xs text-gray-400">Messages from WhatsApp will appear here</p>
+            <div className="flex flex-col items-center justify-center py-12 sm:py-16 text-center px-3">
+              <Inbox size={32} className="mb-3 text-gray-300 sm:w-9 sm:h-9" />
+              <p className="text-sm sm:text-base font-bold text-gray-700">No conversations yet</p>
+              <p className="mt-1 text-xs sm:text-sm font-semibold text-gray-600">Messages from WhatsApp will appear here</p>
             </div>
           ) : (
             conversations.map((conv) => (
               <button
                 key={conv.id}
                 onClick={() => openConversation(conv)}
-                className={`flex w-full items-start gap-3 border-b border-gray-50 px-4 py-3.5 text-left transition-colors hover:bg-gray-50 ${
+                className={`flex w-full items-start gap-2 sm:gap-3 border-b border-gray-50 px-2 sm:px-4 py-2.5 sm:py-3.5 text-left transition-colors hover:bg-gray-50 ${
                   activeId === conv.id ? "bg-green-50 border-l-2 border-l-green-600" : ""
                 }`}
               >
                 {/* Avatar */}
-                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${avatarColor(conv.contactPhone)}`}>
+                <div className={`flex h-9 sm:h-10 w-9 sm:w-10 shrink-0 items-center justify-center rounded-full text-xs sm:text-sm font-bold text-white ${avatarColor(conv.contactPhone)}`}>
                   {initials(conv)}
                 </div>
 
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between">
-                    <p className={`truncate text-sm ${conv.unreadCount > 0 ? "font-bold text-gray-900" : "font-medium text-gray-800"}`}>
+                  <div className="flex items-center justify-between gap-1">
+                    <p className={`truncate text-sm sm:text-base ${conv.unreadCount > 0 ? "font-extrabold text-gray-900" : "font-bold text-gray-900"}`}>
                       {displayName(conv)}
                     </p>
-                    <span className="ml-2 shrink-0 text-[11px] text-gray-400">{timeAgo(conv.lastMessageAt)}</span>
+                    <span className="ml-1 shrink-0 text-[10px] sm:text-[11px] text-gray-400">{timeAgo(conv.lastMessageAt)}</span>
                   </div>
-                  <div className="mt-0.5 flex items-center justify-between gap-2">
-                    <p className={`truncate text-xs ${conv.unreadCount > 0 ? "font-medium text-gray-700" : "text-gray-400"}`}>
+                  <div className="mt-0.5 flex items-center justify-between gap-1">
+                    <p className={`truncate text-xs sm:text-sm ${conv.unreadCount > 0 ? "font-bold text-gray-800" : "font-semibold text-gray-600"}`}>
                       {conv.lastMessage || "No messages yet"}
                     </p>
-                    <div className="flex shrink-0 items-center gap-1.5">
+                    <div className="flex shrink-0 items-center gap-1">
                       {conv.status !== "open" && (
-                        <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                        <span className={`rounded-full px-1.5 py-0.5 text-[8px] sm:text-[10px] font-semibold whitespace-nowrap ${
                           conv.status === "resolved" ? "bg-gray-100 text-gray-500" : "bg-yellow-100 text-yellow-700"
                         }`}>
                           {conv.status}
                         </span>
                       )}
                       {conv.unreadCount > 0 && (
-                        <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-green-600 px-1 text-[10px] font-bold text-white">
+                        <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-green-600 px-1 text-[9px] sm:text-[10px] font-bold text-white">
                           {conv.unreadCount}
                         </span>
                       )}
@@ -378,43 +378,43 @@ export default function InboxPage() {
           mobileView === "list" ? "hidden md:flex" : "flex"
         }`}>
           {/* Chat Header */}
-          <div className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
-            <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between border-b border-gray-200 bg-white px-2 sm:px-4 py-2 sm:py-3 gap-2">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
               <button
                 onClick={() => setMobileView("list")}
-                className="md:hidden mr-1 text-gray-500 hover:text-gray-700"
+                className="md:hidden mr-1 text-gray-500 hover:text-gray-700 flex-shrink-0"
               >
                 <ArrowLeft size={20} />
               </button>
-              <div className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white ${avatarColor(activeConv.contactPhone)}`}>
+              <div className={`flex h-8 sm:h-10 w-8 sm:w-10 items-center justify-center rounded-full text-xs sm:text-sm font-bold text-white flex-shrink-0 ${avatarColor(activeConv.contactPhone)}`}>
                 {initials(activeConv)}
               </div>
-              <div>
-                <p className="text-sm font-semibold text-gray-900">{displayName(activeConv)}</p>
-                <p className="flex items-center gap-1 text-xs text-gray-400">
-                  <Phone size={11} /> {activeConv.contactPhone}
+              <div className="min-w-0">
+                <p className="text-sm sm:text-base font-extrabold text-gray-900 truncate">{displayName(activeConv)}</p>
+                <p className="flex items-center gap-1 text-xs sm:text-sm font-semibold text-gray-600">
+                  <Phone size={10} className="sm:w-3 sm:h-3" /> {activeConv.contactPhone}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
               {/* Status Dropdown */}
               <div className="relative group">
-                <button className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold ${
+                <button className={`flex items-center gap-1 rounded-lg border px-2 sm:px-3 py-1 text-xs sm:text-sm font-bold ${
                   activeConv.status === "open"
                     ? "border-green-200 bg-green-50 text-green-700"
                     : activeConv.status === "resolved"
                     ? "border-gray-200 bg-gray-50 text-gray-600"
                     : "border-yellow-200 bg-yellow-50 text-yellow-700"
                 }`}>
-                  {activeConv.status} <ChevronDown size={12} />
+                  {activeConv.status} <ChevronDown size={12} className="hidden sm:block" />
                 </button>
-                <div className="absolute right-0 top-full z-10 mt-1 hidden w-36 rounded-xl border border-gray-200 bg-white py-1 shadow-lg group-hover:block">
+                <div className="absolute right-0 top-full z-10 mt-1 hidden w-32 sm:w-36 rounded-xl border border-gray-200 bg-white py-1 shadow-lg group-hover:block">
                   {(["open", "pending", "resolved"] as ConvStatus[]).map((s) => (
                     <button
                       key={s}
                       onClick={() => handleStatusChange(s)}
-                      className="flex w-full items-center px-3 py-2 text-xs capitalize text-gray-700 hover:bg-gray-50"
+                      className="flex w-full items-center px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm capitalize text-gray-800 font-semibold hover:bg-gray-50"
                     >
                       {s}
                     </button>
@@ -422,14 +422,14 @@ export default function InboxPage() {
                 </div>
               </div>
               <button className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100">
-                <MoreVertical size={16} />
+                <MoreVertical size={16} className="sm:w-4 sm:h-4" />
               </button>
             </div>
           </div>
 
           {/* Messages — WhatsApp chat background */}
           <div
-            className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-1"
+            className="flex-1 min-h-0 overflow-y-auto px-2 sm:px-4 py-2 sm:py-4 space-y-1"
             style={{
               backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23c8d6c8' fill-opacity='0.25'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
               backgroundColor: "#e5ddd5",
@@ -441,30 +441,30 @@ export default function InboxPage() {
               </div>
             ) : messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
-                <MessageSquare size={32} className="mb-3 text-gray-400" />
-                <p className="text-sm text-gray-500">No messages in this conversation</p>
+                <MessageSquare size={32} className="mb-3 text-gray-400 sm:w-8 sm:h-8" />
+                <p className="text-sm sm:text-base font-bold text-gray-700">No messages in this conversation</p>
               </div>
             ) : (
               groupedMessages.map(({ date, msgs }) => (
                 <div key={date}>
                   {/* Date separator */}
-                  <div className="flex justify-center my-3">
-                    <span className="rounded-full bg-white/80 px-3 py-1 text-[11px] text-gray-500 shadow-sm">
+                  <div className="flex justify-center my-2 sm:my-3">
+                    <span className="rounded-full bg-white/80 px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-[11px] text-gray-500 shadow-sm">
                       {date}
                     </span>
                   </div>
                   {msgs.map((msg) => (
                     <div
                       key={msg.id}
-                      className={`relative flex mb-1 ${msg.direction === "outbound" ? "justify-end" : "justify-start"}`}
+                      className={`relative flex mb-0.5 sm:mb-1 ${msg.direction === "outbound" ? "justify-end" : "justify-start"}`}
                     >
                       <div
-                        className={`relative max-w-[72%] shadow-sm overflow-hidden ${
+                        className={`relative max-w-xs sm:max-w-sm shadow-sm overflow-hidden ${
                           msg.mediaUrl
-                            ? "rounded-[18px] p-0"
+                            ? "rounded-2xl p-0"
                             : msg.direction === "outbound"
-                            ? "rounded-[18px] rounded-tr-[4px] px-3 py-2"
-                            : "rounded-[18px] rounded-tl-[4px] px-3 py-2"
+                            ? "rounded-2xl rounded-tr-sm px-2 sm:px-3 py-1.5 sm:py-2"
+                            : "rounded-2xl rounded-tl-sm px-2 sm:px-3 py-1.5 sm:py-2"
                         } ${
                           msg.direction === "outbound"
                             ? "bg-[#dcf8c6] text-gray-900"
@@ -479,23 +479,23 @@ export default function InboxPage() {
                               src={msg.mediaUrl}
                               alt="media"
                               onClick={() => setSelectedImageUrl(msg.mediaUrl!)}
-                              className="w-full max-w-[260px] max-h-[260px] object-cover cursor-pointer block"
+                              className="w-full max-w-[200px] sm:max-w-[260px] max-h-[200px] sm:max-h-[260px] object-cover cursor-pointer block"
                             />
                             {msg.text && (
-                              <div className="px-3 pt-2 pb-6">
-                                <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                              <div className="px-2 sm:px-3 pt-1.5 sm:pt-2 pb-5 sm:pb-6">
+                                <p className="text-sm sm:text-base font-semibold leading-relaxed whitespace-pre-wrap">{msg.text}</p>
                               </div>
                             )}
-                            <div className="absolute bottom-1.5 right-2.5 flex items-center gap-1">
-                              <span className="text-[10px] text-gray-500">{formatTime(msg.createdAt)}</span>
+                            <div className="absolute bottom-1 sm:bottom-1.5 right-2 sm:right-2.5 flex items-center gap-0.5 sm:gap-1">
+                              <span className="text-[8px] sm:text-[10px] text-gray-500">{formatTime(msg.createdAt)}</span>
                               {msg.direction === "outbound" && <StatusIcon status={msg.status} />}
                             </div>
                           </>
                         ) : (
                           <>
-                            <p className="text-sm leading-relaxed pr-14 whitespace-pre-wrap">{msg.text}</p>
-                            <div className="absolute bottom-1.5 right-2.5 flex items-center gap-1">
-                              <span className="text-[10px] text-gray-500">{formatTime(msg.createdAt)}</span>
+                            <p className="text-sm sm:text-base font-semibold leading-relaxed pr-12 sm:pr-14 whitespace-pre-wrap">{msg.text}</p>
+                            <div className="absolute bottom-1 sm:bottom-1.5 right-2 sm:right-2.5 flex items-center gap-0.5 sm:gap-1">
+                              <span className="text-[8px] sm:text-[10px] text-gray-500">{formatTime(msg.createdAt)}</span>
                               {msg.direction === "outbound" && <StatusIcon status={msg.status} />}
                             </div>
                           </>
@@ -510,14 +510,14 @@ export default function InboxPage() {
           </div>
 
           {selectedImageUrl && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-              <div className="relative max-h-full w-full max-w-4xl overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-2 sm:p-4">
+              <div className="relative max-h-full w-full max-w-2xl sm:max-w-4xl overflow-hidden rounded-2xl sm:rounded-3xl bg-white shadow-2xl">
                 <button
                   onClick={() => setSelectedImageUrl(null)}
-                  className="absolute right-4 top-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-gray-600 shadow-sm transition hover:bg-gray-100"
+                  className="absolute right-2 sm:right-4 top-2 sm:top-4 z-10 inline-flex h-8 sm:h-10 w-8 sm:w-10 items-center justify-center rounded-full bg-white text-gray-600 shadow-sm transition hover:bg-gray-100"
                   aria-label="Close image preview"
                 >
-                  <X size={20} />
+                  <X size={18} className="sm:w-5 sm:h-5" />
                 </button>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={selectedImageUrl} alt="Preview" className="max-h-[85vh] w-full object-contain" />
@@ -526,16 +526,16 @@ export default function InboxPage() {
           )}
 
           {/* Reply Box */}
-          <div className="bg-[#e5ddd5] px-4 py-3 border-t border-[#d6d6d6]">
+          <div className="bg-[#e5ddd5] px-2 sm:px-4 py-2 sm:py-3 border-t border-[#d6d6d6]">
             {sendError && (
-              <p className="mb-2 text-xs text-red-500 px-1">{sendError}</p>
+              <p className="mb-2 text-[10px] sm:text-xs text-red-500 px-1">{sendError}</p>
             )}
-            <div className="flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-sm border border-gray-200">
-              <button className="shrink-0 text-gray-500 hover:text-gray-700 p-2 rounded-full transition-colors hover:bg-gray-100">
-                <Smile size={20} />
+            <div className="flex items-center gap-1 sm:gap-2 rounded-full bg-white px-2 sm:px-3 py-1.5 sm:py-2 shadow-sm border border-gray-200">
+              <button className="shrink-0 text-gray-500 hover:text-gray-700 p-1.5 sm:p-2 rounded-full transition-colors hover:bg-gray-100">
+                <Smile size={18} className="sm:w-5 sm:h-5" />
               </button>
-              <button className="shrink-0 text-gray-500 hover:text-gray-700 p-2 rounded-full transition-colors hover:bg-gray-100">
-                <Paperclip size={20} />
+              <button className="shrink-0 text-gray-500 hover:text-gray-700 p-1.5 sm:p-2 rounded-full transition-colors hover:bg-gray-100">
+                <Paperclip size={18} className="sm:w-5 sm:h-5" />
               </button>
               <textarea
                 value={replyText}
@@ -548,18 +548,18 @@ export default function InboxPage() {
                 }}
                 placeholder="Type a message"
                 rows={1}
-                className="flex-1 resize-none bg-transparent text-sm outline-none placeholder:text-gray-400"
+                className="flex-1 resize-none bg-transparent text-sm sm:text-base font-semibold outline-none placeholder:text-gray-400"
                 style={{ maxHeight: "140px" }}
               />
               <button
                 onClick={handleReply}
                 disabled={!replyText.trim() || sending}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
+                className="flex h-8 sm:h-10 w-8 sm:w-10 shrink-0 items-center justify-center rounded-full bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
               >
                 {sending ? (
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  <div className="h-3 sm:h-4 w-3 sm:w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
                 ) : (
-                  <Send size={16} />
+                  <Send size={16} className="sm:w-4 sm:h-4" />
                 )}
               </button>
             </div>
@@ -568,16 +568,16 @@ export default function InboxPage() {
       ) : (
         /* Empty State */
         <div
-          className="hidden md:flex flex-1 flex-col items-center justify-center"
+          className="hidden md:flex flex-1 flex-col items-center justify-center px-4"
           style={{
             backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23c8d6c8' fill-opacity='0.25'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
             backgroundColor: "#e5ddd5",
           }}
         >
-          <div className="rounded-2xl bg-white/80 px-8 py-6 text-center shadow-sm">
-            <MessageSquare size={40} className="mx-auto mb-3 text-green-600" />
-            <p className="text-base font-semibold text-gray-700">Select a conversation</p>
-            <p className="mt-1 text-sm text-gray-400">Choose a conversation from the left to start chatting</p>
+          <div className="rounded-2xl bg-white/80 px-6 sm:px-8 py-4 sm:py-6 text-center shadow-sm">
+            <MessageSquare size={36} className="mx-auto mb-2 sm:mb-3 text-green-600 sm:w-10 sm:h-10" />
+            <p className="text-base sm:text-xl font-extrabold text-gray-900">Select a conversation</p>
+            <p className="mt-1 text-sm sm:text-base font-semibold text-gray-700">Choose a conversation from the left to start chatting</p>
           </div>
         </div>
       )}
