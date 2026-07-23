@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Search, Send, CheckCheck, Check, Clock, RefreshCw,
   MessageSquare, Phone, MoreVertical, Filter, Inbox,
-  ChevronDown, Circle, Smile, Paperclip, ArrowLeft, X,
+  ChevronDown, Circle, Smile, Paperclip, ArrowLeft, X, LayoutTemplate,
 } from "lucide-react";
 
 function authFetch(url: string, options: RequestInit = {}) {
@@ -40,6 +40,20 @@ interface Message {
   from: string;
   messageType: string;
   mediaUrl?: string | null;
+  templateId?: string | null;
+}
+
+interface Template {
+  id: string;
+  name: string;
+  category: string;
+  language: string;
+  status: string;
+  header?: string | null;
+  headerType?: string | null;
+  body: string;
+  footer?: string | null;
+  buttons?: { type: string; text: string; url?: string; phone_number?: string }[] | null;
 }
 
 function dateSeparator(iso: string) {
@@ -95,6 +109,10 @@ export default function InboxPage() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [sendError, setSendError] = useState("");
   const [mobileView, setMobileView] = useState<"list" | "chat">("list");
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [templateSearch, setTemplateSearch] = useState("");
+  const [sendingTemplate, setSendingTemplate] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -213,6 +231,49 @@ export default function InboxPage() {
     setConversations((prev) =>
       prev.map((c) => (c.id === activeId ? { ...c, status } : c))
     );
+  };
+
+  const fetchTemplates = useCallback(async () => {
+    const res = await authFetch("/api/templates?status=APPROVED");
+    if (res.ok) {
+      const data = await res.json();
+      setTemplates(Array.isArray(data) ? data : []);
+    }
+  }, []);
+
+  const handleSendTemplate = async (t: Template) => {
+    if (!activeId || !activeConv || sendingTemplate) return;
+    setSendingTemplate(true);
+    setSendError("");
+    const res = await authFetch(`/api/templates/${t.id}`, {
+      method: "POST",
+      body: JSON.stringify({ phone: activeConv.contactPhone }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setSendError(data.error ?? "Failed to send template");
+    } else {
+      // Add optimistic template bubble
+      const bubble: Message = {
+        id: `tpl-${Date.now()}`,
+        text: t.body,
+        direction: "outbound",
+        status: "sent",
+        createdAt: new Date().toISOString(),
+        from: "me",
+        messageType: "template",
+        mediaUrl: t.headerType === "IMAGE" ? (t.header ?? null) : null,
+        templateId: t.id,
+      };
+      setMessages((prev) => [...prev, bubble]);
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === activeId ? { ...c, lastMessage: t.body, lastMessageAt: new Date().toISOString() } : c
+        )
+      );
+      setShowTemplates(false);
+    }
+    setSendingTemplate(false);
   };
 
   const displayName = (c: Conversation) => c.contactName ?? c.contactPhone;
@@ -458,6 +519,51 @@ export default function InboxPage() {
                       key={msg.id}
                       className={`relative flex mb-0.5 sm:mb-1 ${msg.direction === "outbound" ? "justify-end" : "justify-start"}`}
                     >
+                      {msg.messageType === "template" ? (
+                        // WhatsApp template bubble with image + body + buttons
+                        <div className={`max-w-xs sm:max-w-sm rounded-2xl ${msg.direction === "outbound" ? "rounded-tr-sm" : "rounded-tl-sm"} overflow-hidden shadow-sm bg-[#dcf8c6]`}>
+                          {msg.mediaUrl && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={msg.mediaUrl}
+                              alt="header"
+                              onClick={() => setSelectedImageUrl(msg.mediaUrl!)}
+                              className="w-full max-h-[200px] object-cover cursor-pointer block"
+                            />
+                          )}
+                          <div className="px-3 pt-2 pb-1">
+                            <p className="text-sm font-semibold leading-relaxed whitespace-pre-wrap pr-10">{msg.text}</p>
+                            <div className="flex justify-end items-center gap-1 mt-1">
+                              <span className="text-[10px] text-gray-500">{formatTime(msg.createdAt)}</span>
+                              {msg.direction === "outbound" && <StatusIcon status={msg.status} />}
+                            </div>
+                          </div>
+                          {/* Template buttons */}
+                          {(() => {
+                            const tpl = templates.find((t) => t.id === msg.templateId);
+                            return tpl?.buttons && tpl.buttons.length > 0 ? (
+                              <div className="border-t border-[#b7e0a0]">
+                                {tpl.buttons.map((b, i) => (
+                                  <div key={i} className={`flex items-center justify-center gap-1.5 py-2 text-[13px] font-medium text-[#00a884] bg-[#dcf8c6] ${
+                                    i < tpl.buttons!.length - 1 ? "border-b border-[#b7e0a0]" : ""
+                                  }`}>
+                                    {b.type === "URL" && (
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                                    )}
+                                    {b.type === "PHONE_NUMBER" && (
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                                    )}
+                                    {b.type === "QUICK_REPLY" && (
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                                    )}
+                                    {b.text}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null;
+                          })()}
+                        </div>
+                      ) : (
                       <div
                         className={`relative max-w-xs sm:max-w-sm shadow-sm overflow-hidden ${
                           msg.mediaUrl
@@ -472,7 +578,6 @@ export default function InboxPage() {
                         }`}
                       >
                         {msg.mediaUrl ? (
-                          // WhatsApp template style: image + caption
                           <>
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
@@ -501,6 +606,7 @@ export default function InboxPage() {
                           </>
                         )}
                       </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -525,6 +631,74 @@ export default function InboxPage() {
             </div>
           )}
 
+          {/* Template Picker */}
+          {showTemplates && (
+            <div className="bg-white border-t border-gray-200 shadow-lg max-h-80 flex flex-col">
+              <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100">
+                <span className="text-xs font-semibold text-gray-700">Templates</span>
+                <button onClick={() => setShowTemplates(false)} className="text-gray-400 hover:text-gray-600"><X size={14} /></button>
+              </div>
+              <div className="px-3 py-2 border-b border-gray-100">
+                <input
+                  value={templateSearch}
+                  onChange={(e) => setTemplateSearch(e.target.value)}
+                  placeholder="Search templates..."
+                  className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs outline-none focus:border-green-500"
+                />
+              </div>
+              <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                {templates
+                  .filter((t) => t.name.toLowerCase().includes(templateSearch.toLowerCase()))
+                  .map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => handleSendTemplate(t)}
+                      disabled={sendingTemplate}
+                      className="w-full text-left rounded-xl border border-gray-200 overflow-hidden hover:border-green-400 hover:shadow-sm transition disabled:opacity-60"
+                    >
+                      {/* WhatsApp-style preview */}
+                      <div className="bg-[#e5ddd5] px-3 py-2">
+                        <div className="ml-auto max-w-[85%] rounded-lg bg-white shadow-sm overflow-hidden">
+                          {t.headerType === "IMAGE" && t.header ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={t.header} alt="header" className="w-full h-20 object-cover" />
+                          ) : t.header ? (
+                            <div className="px-2 pt-2 pb-0.5">
+                              <p className="text-[11px] font-bold text-gray-800">{t.header}</p>
+                            </div>
+                          ) : null}
+                          <div className="px-2 pt-1.5 pb-1">
+                            <p className="text-[11px] text-gray-800 leading-relaxed line-clamp-3 whitespace-pre-line">{t.body}</p>
+                          </div>
+                          {t.footer && (
+                            <div className="px-2 pb-1">
+                              <p className="text-[10px] text-gray-400">{t.footer}</p>
+                            </div>
+                          )}
+                          {t.buttons && t.buttons.length > 0 && (
+                            <div className="border-t border-gray-100">
+                              {t.buttons.map((b, i) => (
+                                <div key={i} className={`flex items-center justify-center gap-1 py-1.5 text-[11px] font-medium text-[#00a884] ${i < t.buttons!.length - 1 ? "border-b border-gray-100" : ""}` }>
+                                  {b.text}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="px-3 py-1.5 bg-white flex items-center justify-between">
+                        <span className="text-[11px] font-semibold text-gray-700">{t.name}</span>
+                        <span className="text-[10px] text-gray-400">{t.category}</span>
+                      </div>
+                    </button>
+                  ))}
+                {templates.filter((t) => t.name.toLowerCase().includes(templateSearch.toLowerCase())).length === 0 && (
+                  <p className="text-center text-xs text-gray-400 py-4">No approved templates found</p>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Reply Box */}
           <div className="bg-[#e5ddd5] px-2 sm:px-4 py-2 sm:py-3 border-t border-[#d6d6d6]">
             {sendError && (
@@ -533,6 +707,15 @@ export default function InboxPage() {
             <div className="flex items-center gap-1 sm:gap-2 rounded-full bg-white px-2 sm:px-3 py-1.5 sm:py-2 shadow-sm border border-gray-200">
               <button className="shrink-0 text-gray-500 hover:text-gray-700 p-1.5 sm:p-2 rounded-full transition-colors hover:bg-gray-100">
                 <Smile size={18} className="sm:w-5 sm:h-5" />
+              </button>
+              <button
+                onClick={() => { setShowTemplates((v) => !v); if (!templates.length) fetchTemplates(); }}
+                className={`shrink-0 p-1.5 sm:p-2 rounded-full transition-colors hover:bg-gray-100 ${
+                  showTemplates ? "text-green-600 bg-green-50" : "text-gray-500 hover:text-gray-700"
+                }`}
+                title="Send Template"
+              >
+                <LayoutTemplate size={18} className="sm:w-5 sm:h-5" />
               </button>
               <button className="shrink-0 text-gray-500 hover:text-gray-700 p-1.5 sm:p-2 rounded-full transition-colors hover:bg-gray-100">
                 <Paperclip size={18} className="sm:w-5 sm:h-5" />
