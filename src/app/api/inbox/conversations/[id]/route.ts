@@ -43,6 +43,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       from: true,
       messageType: true,
       mediaUrl: true,
+      metadata: true,
     },
   });
 

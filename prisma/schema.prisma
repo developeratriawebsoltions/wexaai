@@ -115,6 +115,7 @@ model Message {
   contactId      String?
   messageType    String       @default("text")
   mediaUrl       String?
+  metadata       Json?
   contact        Contact?     @relation(fields: [contactId], references: [id])
   conversation   Conversation @relation(fields: [conversationId], references: [id])
   workspace      Workspace    @relation(fields: [workspaceId], references: [id])

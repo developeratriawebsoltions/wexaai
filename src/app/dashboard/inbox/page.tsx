@@ -23,12 +23,20 @@ type ConvStatus = "open" | "resolved" | "pending";
 
 interface Conversation {
   id: string;
+  contactId: string;
   contactPhone: string;
   contactName: string | null;
   lastMessage: string;
   lastMessageAt: string;
   unreadCount: number;
   status: ConvStatus;
+}
+
+interface TemplateButton {
+  type: string;
+  text: string;
+  url?: string;
+  phone_number?: string;
 }
 
 interface Message {
@@ -40,7 +48,8 @@ interface Message {
   from: string;
   messageType: string;
   mediaUrl?: string | null;
-  templateId?: string | null;
+  templateButtons?: TemplateButton[] | null;
+  metadata?: TemplateButton[] | null;
 }
 
 interface Template {
@@ -110,7 +119,9 @@ export default function InboxPage() {
   const [sendError, setSendError] = useState("");
   const [mobileView, setMobileView] = useState<"list" | "chat">("list");
   const [showTemplates, setShowTemplates] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
+  const fileRef = useRef<HTMLInputElement | null>(null);
   const [templateSearch, setTemplateSearch] = useState("");
   const [sendingTemplate, setSendingTemplate] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -247,7 +258,7 @@ export default function InboxPage() {
     setSendError("");
     const res = await authFetch(`/api/templates/${t.id}`, {
       method: "POST",
-      body: JSON.stringify({ phone: activeConv.contactPhone }),
+      body: JSON.stringify({ contactId: activeConv.contactId }),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -263,7 +274,7 @@ export default function InboxPage() {
         from: "me",
         messageType: "template",
         mediaUrl: t.headerType === "IMAGE" ? (t.header ?? null) : null,
-        templateId: t.id,
+        templateButtons: t.buttons ?? null,
       };
       setMessages((prev) => [...prev, bubble]);
       setConversations((prev) =>
@@ -274,6 +285,52 @@ export default function InboxPage() {
       setShowTemplates(false);
     }
     setSendingTemplate(false);
+  };
+
+  const emojiList = ["😀","😃","😄","😁","😆","😊","😇","🙂","🙃","😉","😍","😘","😜","🤔","😴","🤖","👍","👎","👏","🙏","🔥","🎉","❤️"];
+
+  const handleSelectEmoji = (e: string) => {
+    setReplyText((prev) => prev + e);
+    setShowEmojiPicker(false);
+  };
+
+  const uploadMedia = async (file: File) => {
+    if (!activeId) return;
+    setSendError("");
+    // optimistic UI
+    const objUrl = URL.createObjectURL(file);
+    const optimistic: Message = {
+      id: `media-opt-${Date.now()}`,
+      text: file.name,
+      direction: "outbound",
+      status: "sending",
+      createdAt: new Date().toISOString(),
+      from: "me",
+      messageType: "media",
+      mediaUrl: objUrl,
+    };
+    setMessages((prev) => [...prev, optimistic]);
+
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`/api/inbox/conversations/${activeId}/media`, {
+        method: "POST",
+        body: fd,
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSendError(data.error ?? "Failed to upload");
+        setMessages((prev) => prev.map((m) => (m.id === optimistic.id ? { ...m, status: "failed" } : m)));
+      } else {
+        setMessages((prev) => prev.map((m) => (m.id === optimistic.id ? { ...data, direction: "outbound" } : m)));
+        setConversations((prev) => prev.map((c) => (c.id === activeId ? { ...c, lastMessage: file.name, lastMessageAt: new Date().toISOString() } : c)));
+      }
+    } catch (err: any) {
+      setSendError(err?.message ?? "Upload failed");
+      setMessages((prev) => prev.map((m) => (m.id === optimistic.id ? { ...m, status: "failed" } : m)));
+    }
   };
 
   const displayName = (c: Conversation) => c.contactName ?? c.contactPhone;
@@ -514,7 +571,23 @@ export default function InboxPage() {
                       {date}
                     </span>
                   </div>
-                  {msgs.map((msg) => (
+                  {msgs.map((msg) => {
+                    // Normalize possible button sources: optimistic `templateButtons`, message `metadata` array,
+                    // or metadata object with a `buttons` key coming from other systems.
+                    const raw = (msg as any).templateButtons ?? msg.metadata;
+                    let msgButtons: TemplateButton[] | null = null;
+                    if (Array.isArray(raw)) msgButtons = raw as TemplateButton[];
+                    else if (raw && typeof raw === "object" && Array.isArray((raw as any).buttons)) msgButtons = (raw as any).buttons;
+                    else msgButtons = null;
+                    // Only keep known button types (defensive): URL, PHONE_NUMBER, QUICK_REPLY
+                    if (msgButtons && msgButtons.length) {
+                      msgButtons = msgButtons.filter((b) => {
+                        const t = (b.type ?? "").toString().toUpperCase();
+                        return t === "URL" || t === "PHONE_NUMBER" || t === "QUICK_REPLY";
+                      });
+                      if (msgButtons.length === 0) msgButtons = null;
+                    }
+                    return (
                     <div
                       key={msg.id}
                       className={`relative flex mb-0.5 sm:mb-1 ${msg.direction === "outbound" ? "justify-end" : "justify-start"}`}
@@ -538,30 +611,25 @@ export default function InboxPage() {
                               {msg.direction === "outbound" && <StatusIcon status={msg.status} />}
                             </div>
                           </div>
-                          {/* Template buttons */}
-                          {(() => {
-                            const tpl = templates.find((t) => t.id === msg.templateId);
-                            return tpl?.buttons && tpl.buttons.length > 0 ? (
-                              <div className="border-t border-[#b7e0a0]">
-                                {tpl.buttons.map((b, i) => (
-                                  <div key={i} className={`flex items-center justify-center gap-1.5 py-2 text-[13px] font-medium text-[#00a884] bg-[#dcf8c6] ${
-                                    i < tpl.buttons!.length - 1 ? "border-b border-[#b7e0a0]" : ""
-                                  }`}>
-                                    {b.type === "URL" && (
-                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                                    )}
-                                    {b.type === "PHONE_NUMBER" && (
-                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-                                    )}
-                                    {b.type === "QUICK_REPLY" && (
-                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
-                                    )}
-                                    {b.text}
-                                  </div>
-                                ))}
-                              </div>
-                            ) : null;
-                          })()}
+                          {/* Template buttons — normalized from various metadata shapes */}
+                          {msgButtons?.length ? (
+                            <div className="border-t border-[#b7e0a0]">
+                              {msgButtons.map((b, i, arr) => (
+                                <div key={i} className={`flex items-center justify-center gap-1.5 py-2 text-[13px] font-medium text-[#00a884] bg-[#dcf8c6] ${i < arr.length - 1 ? "border-b border-[#b7e0a0]" : ""}`}>
+                                  {b.type === "URL" && (
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                                  )}
+                                  {b.type === "PHONE_NUMBER" && (
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                                  )}
+                                  {b.type === "QUICK_REPLY" && (
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                                  )}
+                                  {b.text}
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
                         </div>
                       ) : (
                       <div
@@ -591,6 +659,25 @@ export default function InboxPage() {
                                 <p className="text-sm sm:text-base font-semibold leading-relaxed whitespace-pre-wrap">{msg.text}</p>
                               </div>
                             )}
+                            {/* Template buttons for media messages (image templates) */}
+                            {msgButtons?.length ? (
+                              <div className="border-t border-gray-100">
+                                {msgButtons.map((b, i) => (
+                                  <div key={i} className={`flex items-center justify-center gap-1.5 py-2 text-[13px] font-medium text-[#00a884] ${i < msgButtons!.length - 1 ? "border-b border-gray-100" : ""}`}>
+                                    {b.type === "URL" && (
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                                    )}
+                                    {b.type === "PHONE_NUMBER" && (
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                                    )}
+                                    {b.type === "QUICK_REPLY" && (
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                                    )}
+                                    {b.text}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
                             <div className="absolute bottom-1 sm:bottom-1.5 right-2 sm:right-2.5 flex items-center gap-0.5 sm:gap-1">
                               <span className="text-[8px] sm:text-[10px] text-gray-500">{formatTime(msg.createdAt)}</span>
                               {msg.direction === "outbound" && <StatusIcon status={msg.status} />}
@@ -608,7 +695,8 @@ export default function InboxPage() {
                       </div>
                       )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ))
             )}
@@ -705,9 +793,22 @@ export default function InboxPage() {
               <p className="mb-2 text-[10px] sm:text-xs text-red-500 px-1">{sendError}</p>
             )}
             <div className="flex items-center gap-1 sm:gap-2 rounded-full bg-white px-2 sm:px-3 py-1.5 sm:py-2 shadow-sm border border-gray-200">
-              <button className="shrink-0 text-gray-500 hover:text-gray-700 p-1.5 sm:p-2 rounded-full transition-colors hover:bg-gray-100">
-                <Smile size={18} className="sm:w-5 sm:h-5" />
-              </button>
+              <div className="relative">
+                <button
+                  onClick={() => setShowEmojiPicker((v) => !v)}
+                  className="shrink-0 text-gray-500 hover:text-gray-700 p-1.5 sm:p-2 rounded-full transition-colors hover:bg-gray-100"
+                  title="Insert emoji"
+                >
+                  <Smile size={18} className="sm:w-5 sm:h-5" />
+                </button>
+                {showEmojiPicker && (
+                  <div className="absolute bottom-12 left-0 z-20 w-56 max-w-xs rounded-lg bg-white border border-gray-200 shadow-lg p-2 grid grid-cols-8 gap-1">
+                    {emojiList.map((e) => (
+                      <button key={e} onClick={() => handleSelectEmoji(e)} className="p-1 text-sm hover:bg-gray-100 rounded">{e}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <button
                 onClick={() => { setShowTemplates((v) => !v); if (!templates.length) fetchTemplates(); }}
                 className={`shrink-0 p-1.5 sm:p-2 rounded-full transition-colors hover:bg-gray-100 ${
@@ -717,9 +818,25 @@ export default function InboxPage() {
               >
                 <LayoutTemplate size={18} className="sm:w-5 sm:h-5" />
               </button>
-              <button className="shrink-0 text-gray-500 hover:text-gray-700 p-1.5 sm:p-2 rounded-full transition-colors hover:bg-gray-100">
-                <Paperclip size={18} className="sm:w-5 sm:h-5" />
-              </button>
+              <>
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  className="shrink-0 text-gray-500 hover:text-gray-700 p-1.5 sm:p-2 rounded-full transition-colors hover:bg-gray-100"
+                  title="Attach file"
+                >
+                  <Paperclip size={18} className="sm:w-5 sm:h-5" />
+                </button>
+                <input
+                  ref={(el) => { fileRef.current = el; }}
+                  type="file"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) uploadMedia(f);
+                    e.currentTarget.value = "";
+                  }}
+                />
+              </>
               <textarea
                 value={replyText}
                 onChange={(e) => setReplyText(e.target.value)}

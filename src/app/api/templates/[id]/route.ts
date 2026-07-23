@@ -119,6 +119,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       status: "sent",
       messageType: "template",
       mediaUrl: template.headerType && template.headerType !== "TEXT" ? (headerUrl || template.header) : null,
+      metadata: template.buttons ? template.buttons : undefined,
     },
   });
 
