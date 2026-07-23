@@ -58,16 +58,90 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const publicUrl = uploadResult.secure_url;
 
     // Save message to DB
-    const conversation = await prisma.conversation.findFirst({ where: { id, workspaceId } });
+    const [conversation, waAccount] = await Promise.all([
+      prisma.conversation.findFirst({ where: { id, workspaceId } }),
+      prisma.whatsAppAccount.findUnique({ where: { workspaceId } }),
+    ]);
+
     if (!conversation) return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
+    if (!waAccount || waAccount.status !== "active") {
+      return NextResponse.json({ error: "WhatsApp not connected" }, { status: 400 });
+    }
+
+    const normalizedTo = conversation.contactPhone.replace(/^\+/, "");
+    const mediaType = file.type?.startsWith("video/") ? "video" : file.type?.startsWith("image/") ? "image" : "document";
+    const metaPayload: Record<string, unknown> = {
+      messaging_product: "whatsapp",
+      to: normalizedTo,
+      type: mediaType,
+    };
+
+    if (mediaType === "image") {
+      (metaPayload as any).image = { link: publicUrl, caption: file.name };
+    } else if (mediaType === "video") {
+      (metaPayload as any).video = { link: publicUrl, caption: file.name };
+    } else {
+      (metaPayload as any).document = { link: publicUrl, filename: file.name, caption: file.name };
+    }
+
+    const metaRes = await fetch(
+      `https://graph.facebook.com/v19.0/${waAccount.phoneNumberId}/messages`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${waAccount.accessToken}`,
+        },
+        body: JSON.stringify(metaPayload),
+      }
+    );
+
+    const metaData = await metaRes.json();
+
+    if (!metaRes.ok || metaData.error) {
+      const failedMessage = await prisma.message.create({
+        data: {
+          workspaceId,
+          conversationId: id,
+          contactId: conversation.contactId,
+          from: waAccount.phoneNumberId,
+          text: file.name,
+          direction: "outbound",
+          status: "failed",
+          messageType: "media",
+          mediaUrl: publicUrl,
+        },
+      });
+
+      await prisma.conversation.update({ where: { id }, data: { lastMessage: file.name, lastMessageAt: new Date() } });
+
+      return NextResponse.json(
+        {
+          error: metaData.error?.message ?? "Failed to send media message",
+          message: {
+            id: failedMessage.id,
+            text: failedMessage.text,
+            direction: failedMessage.direction,
+            status: failedMessage.status,
+            createdAt: failedMessage.createdAt,
+            mediaUrl: failedMessage.mediaUrl,
+            messageType: failedMessage.messageType,
+          },
+        },
+        { status: 400 }
+      );
+    }
+
+    const waMessageId = metaData.messages?.[0]?.id;
 
     const message = await prisma.message.create({
       data: {
         workspaceId,
         conversationId: id,
         contactId: conversation.contactId,
-        from: user.id,
+        from: waAccount.phoneNumberId,
         text: file.name,
+        waMessageId,
         direction: "outbound",
         status: "sent",
         messageType: "media",
