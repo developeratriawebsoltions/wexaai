@@ -92,7 +92,7 @@ export default function WhatsAppCloudAPIPage() {
 
     // Quick Meta API check directly from browser (no credentials saved yet)
     const res = await fetch(
-      `https://graph.facebook.com/v19.0/${phoneNumberId}?fields=display_phone_number,verified_name&access_token=${accessToken}`
+      `https://graph.facebook.com/v21.0/${phoneNumberId}?fields=display_phone_number,verified_name&access_token=${accessToken}`
     );
     const data = await res.json();
 

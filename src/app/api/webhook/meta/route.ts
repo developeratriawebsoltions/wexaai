@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
 
   async function getMediaUrl(mediaId: string, accessToken: string): Promise<string | null> {
     try {
-      const metaRes = await fetch(`https://graph.facebook.com/v19.0/${mediaId}?fields=url`, {
+      const metaRes = await fetch(`https://graph.facebook.com/v21.0/${mediaId}?fields=url`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       const metaData = await metaRes.json() as { url?: string };

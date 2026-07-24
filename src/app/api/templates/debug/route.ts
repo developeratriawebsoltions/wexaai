@@ -17,23 +17,35 @@ export async function GET(req: NextRequest) {
   });
   if (!wa) return NextResponse.json({ error: "No WA account" }, { status: 404 });
 
-  // Step 1: Start upload session
-  const sessionRes = await fetch(`https://graph.facebook.com/v21.0/app/uploads`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${wa.accessToken}`,
-    },
-    body: JSON.stringify({
-      file_length: 346003,
-      file_type: "image/jpeg",
-    }),
-  });
-  const sessionData = await sessionRes.json();
+  // Fetch WABA details to check account status and country
+  const wabaRes = await fetch(
+    `https://graph.facebook.com/v21.0/${wa.wabaId}?fields=id,name,currency,timezone_id,message_template_namespace,on_behalf_of_business_info`,
+    { headers: { Authorization: `Bearer ${wa.accessToken}` } }
+  );
+  const wabaData = await wabaRes.json();
 
-  return NextResponse.json({
-    step: "upload_session",
-    status: sessionRes.status,
-    response: sessionData,
-  });
+  // Fetch existing templates to see what languages Meta already has for this WABA
+  const tmplRes = await fetch(
+    `https://graph.facebook.com/v21.0/${wa.wabaId}/message_templates?limit=5&fields=name,language,status`,
+    { headers: { Authorization: `Bearer ${wa.accessToken}` } }
+  );
+  const tmplData = await tmplRes.json();
+
+  // Try creating a minimal template with en_US to see exact error
+  const testRes = await fetch(
+    `https://graph.facebook.com/v21.0/${wa.wabaId}/message_templates`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${wa.accessToken}` },
+      body: JSON.stringify({
+        name: "debug_test_delete_me",
+        category: "UTILITY",
+        language: "en_US",
+        components: [{ type: "BODY", text: "debug test" }],
+      }),
+    }
+  );
+  const testData = await testRes.json();
+
+  return NextResponse.json({ wabaId: wa.wabaId, wabaDetails: wabaData, existingTemplates: tmplData, testWithEnUS: testData });
 }

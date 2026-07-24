@@ -27,7 +27,7 @@ function normalizeToPhone(phone: string) {
 }
 
 async function sendTextMessage(phoneNumberId: string, accessToken: string, to: string, text: string) {
-  const res = await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}/messages`, {
+  const res = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify({ messaging_product: "whatsapp", to: normalizeToPhone(to), type: "text", text: { body: text, preview_url: false } }),
@@ -83,7 +83,7 @@ async function sendTemplateMessage(
 
   console.log("[Flow] sendTemplateMessage payload:", JSON.stringify(metaPayload));
 
-  const res = await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}/messages`, {
+  const res = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify(metaPayload),

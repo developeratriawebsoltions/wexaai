@@ -1,0 +1,5 @@
+User uploads image → goes to Cloudinary (for storage/display)
+
+On template create, backend fetches the Cloudinary image and re-uploads it to Meta via their resumable upload API
+
+Meta returns a handle → sent as example.header_handle in the template payload

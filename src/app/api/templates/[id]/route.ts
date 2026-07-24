@@ -72,7 +72,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   console.log("[Template Send] payload:", JSON.stringify(metaPayload, null, 2));
 
   const metaRes = await fetch(
-    `https://graph.facebook.com/v19.0/${wa.phoneNumberId}/messages`,
+    `https://graph.facebook.com/v21.0/${wa.phoneNumberId}/messages`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${wa.accessToken}` },
@@ -152,7 +152,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     if (wa?.status === "active") {
       await fetch(
-        `https://graph.facebook.com/v19.0/${wa.wabaId}/message_templates?hsm_id=${template.metaTemplateId}&name=${template.name}`,
+        `https://graph.facebook.com/v21.0/${wa.wabaId}/message_templates?hsm_id=${template.metaTemplateId}&name=${template.name}`,
         {
           method: "DELETE",
           headers: { Authorization: `Bearer ${wa.accessToken}` },
@@ -165,4 +165,49 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   await prisma.template.delete({ where: { id } });
 
   return NextResponse.json({ success: true });
+}
+
+// PUT /api/templates/[id] — update template (DB)
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const user = getUser(req);
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const membership = await prisma.workspaceMember.findFirst({
+    where: { userId: user.id },
+    select: { workspaceId: true },
+  });
+  if (!membership) return NextResponse.json({ error: "No workspace" }, { status: 404 });
+
+  const { id } = await params;
+  const body = await req.json();
+
+  const template = await prisma.template.findFirst({ where: { id, workspaceId: membership.workspaceId } });
+  if (!template) return NextResponse.json({ error: "Template not found" }, { status: 404 });
+
+  const { name, category, language, header, headerType, body: bodyText, footer, buttons } = body;
+
+  try {
+    const updated = await prisma.template.update({
+      where: { id },
+      data: {
+        name: name ?? template.name,
+        category: category ?? template.category,
+        language: language ?? template.language,
+        header: header ?? null,
+        headerType: headerType ?? null,
+        body: bodyText ?? template.body,
+        footer: footer ?? null,
+        buttons: buttons !== undefined ? buttons : template.buttons,
+        // Mark edited templates as pending approval
+        status: "PENDING",
+        rejectedReason: null,
+      },
+    });
+
+    return NextResponse.json(updated);
+  } catch (err: any) {
+    console.error("[Template Update] error:", err?.message ?? err);
+    const msg = err?.meta?.cause ?? err?.message ?? "Failed to update";
+    return NextResponse.json({ error: msg }, { status: 400 });
+  }
 }

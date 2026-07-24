@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
 
   // Verify credentials against Meta Graph API
   const metaRes = await fetch(
-    `https://graph.facebook.com/v19.0/${phoneNumberId}?fields=display_phone_number,verified_name&access_token=${tokenToUse}`
+    `https://graph.facebook.com/v21.0/${phoneNumberId}?fields=display_phone_number,verified_name&access_token=${tokenToUse}`
   );
   const metaData = await metaRes.json();
 

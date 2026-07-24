@@ -85,7 +85,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     const metaRes = await fetch(
-      `https://graph.facebook.com/v19.0/${waAccount.phoneNumberId}/messages`,
+      `https://graph.facebook.com/v21.0/${waAccount.phoneNumberId}/messages`,
       {
         method: "POST",
         headers: {

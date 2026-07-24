@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
 
   // Fetch all templates from Meta — paginate if needed
   let allTemplates: MetaTemplate[] = [];
-  let url: string | null = `https://graph.facebook.com/v19.0/${wa.wabaId}/message_templates?limit=100&access_token=${wa.accessToken}`;
+  let url: string | null = `https://graph.facebook.com/v21.0/${wa.wabaId}/message_templates?limit=100&access_token=${wa.accessToken}`;
 
   while (url) {
     const res = await fetch(url);

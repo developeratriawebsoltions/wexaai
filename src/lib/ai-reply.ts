@@ -96,7 +96,7 @@ export async function handleAiReply(
 
     // Send via Meta Cloud API first
     const metaRes = await fetch(
-      `https://graph.facebook.com/v19.0/${account.phoneNumberId}/messages`,
+      `https://graph.facebook.com/v21.0/${account.phoneNumberId}/messages`,
       {
         method: "POST",
         headers: {

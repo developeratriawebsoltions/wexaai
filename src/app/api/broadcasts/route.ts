@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
       }
 
       const res = await fetch(
-        `https://graph.facebook.com/v19.0/${wa.phoneNumberId}/messages`,
+        `https://graph.facebook.com/v21.0/${wa.phoneNumberId}/messages`,
         {
           method: "POST",
           headers: {

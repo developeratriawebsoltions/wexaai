@@ -30,8 +30,6 @@ const CATEGORIES = ["MARKETING", "UTILITY", "AUTHENTICATION"];
 const LANGUAGES = [
   { code: "en", label: "English" },
   { code: "en_US", label: "English (US)" },
-  { code: "hi", label: "Hindi" },
-  { code: "es", label: "Spanish" },
 ];
 
 const DEFAULT_FORM = {
@@ -52,6 +50,7 @@ export default function TemplatesPage() {
   const [form, setForm] = useState(DEFAULT_FORM);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Send modal state
   const [sendTemplate, setSendTemplate] = useState<Template | null>(null);
@@ -108,27 +107,58 @@ export default function TemplatesPage() {
   }
 
   async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
+    e?.preventDefault();
     if (!token) return;
     setCreating(true);
     setError("");
-    const res = await fetch("/api/templates", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...form,
-        header: form.header || undefined,
-        footer: form.footer || undefined,
-        buttons: form.buttons.length ? form.buttons : undefined,
-      }),
-    });
+
+    const payload = {
+      ...form,
+      header: form.header || undefined,
+      footer: form.footer || undefined,
+      buttons: form.buttons.length ? form.buttons : undefined,
+    };
+
+    let res: Response;
+    if (editingId) {
+      res = await fetch(`/api/templates/${editingId}`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    } else {
+      res = await fetch("/api/templates", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    }
+
     const data = await res.json();
     setCreating(false);
-    if (!res.ok) { setError(data.error ?? "Failed to create"); return; }
+    if (!res.ok) { setError(data.error ?? (editingId ? "Failed to update" : "Failed to create")); return; }
     setShowModal(false);
     setForm(DEFAULT_FORM);
+    setEditingId(null);
     fetchTemplates();
+  }
+
+  function openEditModal(t: Template) {
+    setError("");
+    setEditingId(t.id);
+    setForm({
+      name: t.name,
+      category: t.category,
+      language: t.language,
+      header: t.header ?? "",
+      headerType: t.headerType ?? "TEXT",
+      body: t.body,
+      footer: t.footer ?? "",
+      buttons: (t.buttons as any[]) ?? [],
+    });
+    setShowModal(true);
   }
 
   function addButton() {
@@ -364,6 +394,10 @@ export default function TemplatesPage() {
                       <Send size={11} /> Send
                     </button>
                   )}
+                  <button onClick={() => openEditModal(t)}
+                    className="flex items-center gap-1 rounded-lg bg-blue-50 px-2.5 py-1.5 text-[11px] font-medium text-blue-600 hover:bg-blue-100 transition" title="Edit template">
+                    Edit
+                  </button>
                   <button onClick={() => handleDelete(t.id)} disabled={deletingId === t.id}
                     className="flex items-center gap-1 rounded-lg bg-red-50 px-2.5 py-1.5 text-[11px] font-medium text-red-500 hover:bg-red-100 transition disabled:opacity-40">
                     {deletingId === t.id ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
@@ -491,123 +525,138 @@ export default function TemplatesPage() {
 
       {/* Create Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl flex flex-col max-h-[90vh]">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <h2 className="text-sm font-semibold text-gray-800">New Template</h2>
-              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-xl rounded-2xl bg-white shadow-2xl flex flex-col max-h-[92vh]">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+              <div>
+                <h2 className="text-base font-bold text-gray-900">{editingId ? "Edit Template" : "New Template"}</h2>
+                <p className="text-xs text-gray-400 mt-0.5">{editingId ? "Edit and save changes to this template" : "Create a WhatsApp message template"}</p>
+              </div>
+              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
             </div>
-            <form onSubmit={handleCreate} className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-              {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>}
+            <form onSubmit={handleCreate} className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+              {error && <p className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">{error}</p>}
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
-                  <label className="text-xs text-gray-500 mb-1 block">Template Name *</label>
+                  <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Template Name <span className="text-green-600">*</span></label>
                   <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                     placeholder="e.g. welcome_message"
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs outline-none focus:border-green-500" />
+                    className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-green-500 focus:bg-white focus:ring-2 focus:ring-green-100 transition" />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500 mb-1 block">Category *</label>
+                  <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Category <span className="text-green-600">*</span></label>
                   <select required value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs outline-none focus:border-green-500">
+                    className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-800 outline-none focus:border-green-500 focus:bg-white focus:ring-2 focus:ring-green-100 transition">
                     {CATEGORIES.map(c => <option key={c}>{c}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500 mb-1 block">Language *</label>
+                  <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Language <span className="text-green-600">*</span></label>
                   <select required value={form.language} onChange={e => setForm(f => ({ ...f, language: e.target.value }))}
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs outline-none focus:border-green-500">
+                    className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-800 outline-none focus:border-green-500 focus:bg-white focus:ring-2 focus:ring-green-100 transition">
                     {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
                   </select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-4">
                 <div className="col-span-2">
-                  <label className="text-xs text-gray-500 mb-1 block">
-                    {form.headerType === "TEXT" ? "Header Text (optional)" : form.headerType === "IMAGE" ? "Header Image URL (optional)" : `Header ${form.headerType} URL (optional)`}
+                  <label className="text-sm font-semibold text-gray-700 mb-1.5 block">
+                    {form.headerType === "TEXT" ? "Header Text" : "Header Image"}
+                    <span className="ml-1 text-xs font-normal text-gray-400">(optional)</span>
                   </label>
-                  <div className="flex items-center gap-2">
-                    <input value={form.header} onChange={e => setForm(f => ({ ...f, header: e.target.value }))}
-                      placeholder={form.headerType === "TEXT" ? "Header text" : form.headerType === "IMAGE" ? "https://example.com/image.jpg or Cloudinary URL" : "https://example.com/file"}
-                      className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-xs outline-none focus:border-green-500" />
-                    {form.headerType === "IMAGE" && (
-                      <>
+                  {form.headerType === "IMAGE" ? (
+                    <div>
+                      {form.header ? (
+                        <div className="relative rounded-lg overflow-hidden border border-gray-200">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={form.header} alt="header preview" className="w-full h-32 object-cover" />
+                          <button type="button" onClick={() => setForm(f => ({ ...f, header: "" }))}
+                            className="absolute top-1.5 right-1.5 rounded-full bg-black/50 p-1 text-white hover:bg-black/70">
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ) : (
                         <button type="button" onClick={() => createFileInputRef.current?.click()} disabled={uploadingHeader}
-                          className="flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-2 text-[11px] text-gray-600 hover:bg-gray-50 disabled:opacity-60">
-                          {uploadingHeader ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-                          Upload
+                          className="flex w-full flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 py-6 text-gray-400 hover:border-green-400 hover:text-green-500 disabled:opacity-60 transition">
+                          {uploadingHeader ? <Loader2 size={20} className="animate-spin" /> : <Upload size={20} />}
+                          <span className="text-xs font-medium">{uploadingHeader ? "Uploading..." : "Click to upload image"}</span>
+                          <span className="text-[11px] text-gray-400">JPG, PNG — must be uploaded (no external URLs)</span>
                         </button>
-                        <input ref={createFileInputRef} type="file" accept="image/*" className="hidden"
-                          onChange={(e) => { const file = e.target.files?.[0] ?? null; if (file) handleHeaderUpload(file, "create"); e.target.value = ""; }} />
-                      </>
-                    )}
-                  </div>
-                  {form.headerType === "IMAGE" && <p className="mt-1 text-[11px] text-gray-400">You can paste a public image URL or upload an image; the uploaded file will be stored in Cloudinary and used for sending.</p>}
+                      )}
+                      <input ref={createFileInputRef} type="file" accept="image/jpeg,image/png,image/jpg" className="hidden"
+                        onChange={(e) => { const file = e.target.files?.[0] ?? null; if (file) handleHeaderUpload(file, "create"); e.target.value = ""; }} />
+                    </div>
+                  ) : (
+                    <input value={form.header} onChange={e => setForm(f => ({ ...f, header: e.target.value }))}
+                      placeholder="Enter header text..."
+                      className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-green-500 focus:bg-white focus:ring-2 focus:ring-green-100 transition" />
+                  )}
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500 mb-1 block">Header Type</label>
+                  <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Header Type</label>
                   <select value={form.headerType} onChange={e => setForm(f => ({ ...f, headerType: e.target.value, header: "" }))}
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs outline-none focus:border-green-500">
+                    className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-800 outline-none focus:border-green-500 focus:bg-white focus:ring-2 focus:ring-green-100 transition">
                     <option value="TEXT">TEXT</option>
                     <option value="IMAGE">IMAGE</option>
-                    <option value="VIDEO" disabled>VIDEO (not supported)</option>
-                    <option value="DOCUMENT" disabled>DOCUMENT (not supported)</option>
+                    <option value="VIDEO" disabled>VIDEO</option>
+                    <option value="DOCUMENT" disabled>DOCUMENT</option>
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="text-xs text-gray-500 mb-1 block">Body *</label>
+                <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Body <span className="text-green-600">*</span></label>
                 <textarea required value={form.body} onChange={e => setForm(f => ({ ...f, body: e.target.value }))}
-                  rows={4} placeholder="Hi {{1}}, your message here..."
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs outline-none focus:border-green-500 resize-none" />
+                  rows={4} placeholder="Hi {{1}}, your order {{2}} has been confirmed! 🎉"
+                  className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-green-500 focus:bg-white focus:ring-2 focus:ring-green-100 transition resize-none" />
+                <p className="mt-1 text-xs text-gray-400">Use {"{{1}}, {{2}}"} for dynamic variables</p>
               </div>
 
               <div>
-                <label className="text-xs text-gray-500 mb-1 block">Footer (optional)</label>
+                <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Footer <span className="text-xs font-normal text-gray-400">(optional)</span></label>
                 <input value={form.footer} onChange={e => setForm(f => ({ ...f, footer: e.target.value }))}
-                  placeholder="Footer text"
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs outline-none focus:border-green-500" />
+                  placeholder="e.g. Reply STOP to unsubscribe"
+                  className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-green-500 focus:bg-white focus:ring-2 focus:ring-green-100 transition" />
               </div>
 
               {/* Buttons */}
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs text-gray-500">Buttons (optional)</label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-semibold text-gray-700">Buttons <span className="text-xs font-normal text-gray-400">(optional)</span></label>
                   {form.buttons.length < 3 && (
-                    <button type="button" onClick={addButton} className="text-xs text-green-600 hover:underline">+ Add</button>
+                    <button type="button" onClick={addButton} className="text-xs font-medium text-green-600 hover:underline">+ Add Button</button>
                   )}
                 </div>
                 {form.buttons.map((btn, i) => (
                   <div key={i} className="flex items-center gap-2 mb-2">
                     <select value={btn.type} onChange={e => updateButton(i, { type: e.target.value })}
-                      className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs outline-none focus:border-green-500">
+                      className="rounded-lg border border-gray-300 bg-gray-50 px-2.5 py-2 text-sm text-gray-700 outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 transition">
                       {["QUICK_REPLY", "URL", "PHONE_NUMBER"].map(t => <option key={t}>{t}</option>)}
                     </select>
                     <input value={btn.text} onChange={e => updateButton(i, { text: e.target.value })}
-                      placeholder="Button text" className="flex-1 rounded-lg border border-gray-200 px-2 py-1.5 text-xs outline-none focus:border-green-500" />
+                      placeholder="Button label" className="flex-1 rounded-lg border border-gray-300 bg-gray-50 px-2.5 py-2 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-green-500 focus:ring-2 focus:ring-green-100 transition" />
                     {btn.type === "URL" && (
                       <input value={btn.url ?? ""} onChange={e => updateButton(i, { url: e.target.value })}
-                        placeholder="https://..." className="flex-1 rounded-lg border border-gray-200 px-2 py-1.5 text-xs outline-none focus:border-green-500" />
+                        placeholder="https://..." className="flex-1 rounded-lg border border-gray-300 bg-gray-50 px-2.5 py-2 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-green-500 focus:ring-2 focus:ring-green-100 transition" />
                     )}
                     {btn.type === "PHONE_NUMBER" && (
                       <input value={btn.phone_number ?? ""} onChange={e => updateButton(i, { phone_number: e.target.value })}
-                        placeholder="+1234567890" className="flex-1 rounded-lg border border-gray-200 px-2 py-1.5 text-xs outline-none focus:border-green-500" />
+                        placeholder="+1234567890" className="flex-1 rounded-lg border border-gray-300 bg-gray-50 px-2.5 py-2 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-green-500 focus:ring-2 focus:ring-green-100 transition" />
                     )}
-                    <button type="button" onClick={() => removeButton(i)} className="text-gray-300 hover:text-red-500"><X size={13} /></button>
+                    <button type="button" onClick={() => removeButton(i)} className="text-gray-300 hover:text-red-500"><X size={14} /></button>
                   </div>
                 ))}
               </div>
             </form>
-            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-100">
+            <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-100">
               <button type="button" onClick={() => setShowModal(false)}
-                className="rounded-lg border border-gray-200 px-4 py-2 text-xs text-gray-600 hover:bg-gray-50">Cancel</button>
+                className="rounded-lg border border-gray-200 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">Cancel</button>
               <button onClick={handleCreate} disabled={creating}
-                className="flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-60">
-                {creating && <Loader2 size={12} className="animate-spin" />}
-                {creating ? "Creating..." : "Create Template"}
+                className="flex items-center gap-1.5 rounded-lg bg-green-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-60 transition">
+                {creating && <Loader2 size={14} className="animate-spin" />}
+                {creating ? (editingId ? "Saving..." : "Creating...") : (editingId ? "Save Changes" : "Create Template")}
               </button>
             </div>
           </div>
