@@ -15,14 +15,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  const valid = verifyOtp(email, "forgot-password", otp);
+  const valid = await verifyOtp(email, "forgot-password", otp);
   if (!valid) {
     return NextResponse.json({ error: "Invalid or expired OTP" }, { status: 401 });
   }
 
   const hashed = await hashPassword(password);
   await prisma.user.update({ where: { id: user.id }, data: { password: hashed } });
-  clearOtp(email, "forgot-password");
+  await clearOtp(email, "forgot-password");
 
   return NextResponse.json({ success: true, message: "Password reset successfully" });
 }

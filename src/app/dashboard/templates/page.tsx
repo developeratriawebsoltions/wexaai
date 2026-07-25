@@ -51,6 +51,7 @@ export default function TemplatesPage() {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [bodyVarLabels, setBodyVarLabels] = useState<Record<string, string>>({});
 
   // Send modal state
   const [sendTemplate, setSendTemplate] = useState<Template | null>(null);
@@ -62,9 +63,8 @@ export default function TemplatesPage() {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
   const [uploadingHeader, setUploadingHeader] = useState(false);
-  const [canSendWithHeader, setCanSendWithHeader] = useState(true);
-  const sendFileInputRef = useRef<HTMLInputElement | null>(null);
   const createFileInputRef = useRef<HTMLInputElement | null>(null);
+  const sendFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const fetchTemplates = useCallback(async () => {
     if (!token) return;
@@ -112,11 +112,26 @@ export default function TemplatesPage() {
     setCreating(true);
     setError("");
 
+    const trimmedBody = form.body.trim();
+    if (/^\{\{\d+\}\}/.test(trimmedBody)) {
+      setError("Body cannot start with a variable like {{1}}. Add some text before it.");
+      setCreating(false);
+      return;
+    }
+    if (/\{\{\d+\}\}$/.test(trimmedBody)) {
+      setError("Body cannot end with a variable like {{1}}. Add some text after it.");
+      setCreating(false);
+      return;
+    }
+
     const payload = {
       ...form,
       header: form.header || undefined,
       footer: form.footer || undefined,
       buttons: form.buttons.length ? form.buttons : undefined,
+      bodyExamples: Object.keys(bodyVarLabels).length
+        ? Object.keys(bodyVarLabels).sort().map(k => bodyVarLabels[k] || `{{${k}}}`)
+        : undefined,
     };
 
     let res: Response;
@@ -142,6 +157,7 @@ export default function TemplatesPage() {
     setShowModal(false);
     setForm(DEFAULT_FORM);
     setEditingId(null);
+    setBodyVarLabels({});
     fetchTemplates();
   }
 
@@ -158,7 +174,15 @@ export default function TemplatesPage() {
       footer: t.footer ?? "",
       buttons: (t.buttons as any[]) ?? [],
     });
+    const vars = [...new Set([...t.body.matchAll(/\{\{(\d+)\}\}/g)].map(m => m[1]))];
+    setBodyVarLabels(Object.fromEntries(vars.map(k => [k, ""])));
     setShowModal(true);
+  }
+
+  function handleBodyChange(value: string) {
+    setForm(f => ({ ...f, body: value }));
+    const vars = [...new Set([...value.matchAll(/\{\{(\d+)\}\}/g)].map(m => m[1]))];
+    setBodyVarLabels(prev => Object.fromEntries(vars.map(k => [k, prev[k] ?? ""])));
   }
 
   function addButton() {
@@ -181,12 +205,11 @@ export default function TemplatesPage() {
     const matches = [...t.body.matchAll(/\{\{(\d+)\}\}/g)];
     const count = matches.length ? Math.max(...matches.map(m => parseInt(m[1]))) : 0;
     setBodyVars(Array(count).fill(""));
-    setHeaderUrl(t.header ?? "");
+    setHeaderUrl("");
     setSelectedContact(null);
     setContactSearch("");
     setContacts([]);
     setSendError("");
-    setCanSendWithHeader(t.headerType !== "IMAGE" || Boolean(t.header));
     setSendTemplate(t);
   }
 
@@ -224,7 +247,6 @@ export default function TemplatesPage() {
 
       if (target === "send") {
         setHeaderUrl(data.url ?? "");
-        setCanSendWithHeader(true);
       } else {
         setForm((f) => ({ ...f, header: data.url ?? "" }));
       }
@@ -294,7 +316,7 @@ export default function TemplatesPage() {
               <RefreshCw size={12} className={syncing ? "animate-spin" : ""} />
               {syncing ? "Syncing..." : "Sync"}
             </button>
-            <button onClick={() => { setShowModal(true); setError(""); setForm(DEFAULT_FORM); }}
+            <button onClick={() => { setShowModal(true); setError(""); setForm(DEFAULT_FORM); setBodyVarLabels({}); setEditingId(null); }}
               className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700">
               <Plus size={13} /> New Template
             </button>
@@ -309,7 +331,7 @@ export default function TemplatesPage() {
         ) : templates.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-gray-400 gap-2">
             <p className="text-sm">No templates found.</p>
-            <button onClick={() => { setShowModal(true); setError(""); setForm(DEFAULT_FORM); }}
+            <button onClick={() => { setShowModal(true); setError(""); setForm(DEFAULT_FORM); setBodyVarLabels({}); setEditingId(null); }}
               className="text-xs text-green-600 hover:underline">Create your first template</button>
           </div>
         ) : (
@@ -460,38 +482,34 @@ export default function TemplatesPage() {
 
               {sendTemplate.headerType === "IMAGE" && (
                 <div>
-                  <label className="text-xs text-gray-500 mb-1 block">Header URL (optional)</label>
-                  <div className="flex items-center gap-2">
-                    <input value={headerUrl} onChange={e => {
-                      setHeaderUrl(e.target.value);
-                      setCanSendWithHeader(Boolean(e.target.value.trim()));
-                    }}
-                      placeholder="https://your-public-domain.com/image.jpg"
-                      className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-xs outline-none focus:border-green-500" />
-                    <button
-                      type="button"
-                      onClick={() => sendFileInputRef.current?.click()}
-                      disabled={uploadingHeader}
-                      className="flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-2 text-[11px] text-gray-600 hover:bg-gray-50 disabled:opacity-60"
-                    >
-                      {uploadingHeader ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-                      Upload
-                    </button>
-                    <input
-                      ref={sendFileInputRef}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0] ?? null;
-                        if (file) handleHeaderUpload(file, "send");
-                        e.target.value = "";
-                      }}
-                    />
-                  </div>
-                  <p className="mt-2 rounded-md border-2 border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
-                    Note: Upload an image before sending.
-                  </p>
+                  {sendTemplate.header?.includes("cloudinary.com") ? (
+                    <div className="rounded-lg overflow-hidden border border-gray-200">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={sendTemplate.header} alt="header" className="w-full h-32 object-cover" />
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="text-xs text-gray-500 mb-1 block">Header Image <span className="text-red-500">*</span></label>
+                      {headerUrl?.trim() ? (
+                        <div className="relative rounded-lg overflow-hidden border border-gray-200">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={headerUrl.trim()} alt="header" className="w-full h-32 object-cover" />
+                          <button type="button" onClick={() => setHeaderUrl("")}
+                            className="absolute top-1.5 right-1.5 rounded-full bg-black/50 p-1 text-white hover:bg-black/70">
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ) : (
+                        <button type="button" onClick={() => sendFileInputRef.current?.click()} disabled={uploadingHeader}
+                          className="flex w-full flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 py-5 text-gray-400 hover:border-green-400 hover:text-green-500 disabled:opacity-60 transition">
+                          {uploadingHeader ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
+                          <span className="text-xs">{uploadingHeader ? "Uploading..." : "Upload image to send"}</span>
+                        </button>
+                      )}
+                      <input ref={sendFileInputRef} type="file" accept="image/jpeg,image/png,image/jpg" className="hidden"
+                        onChange={(e) => { const file = e.target.files?.[0] ?? null; if (file) handleHeaderUpload(file, "send"); e.target.value = ""; }} />
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -513,7 +531,7 @@ export default function TemplatesPage() {
             <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-100">
               <button onClick={() => setSendTemplate(null)}
                 className="rounded-lg border border-gray-200 px-4 py-2 text-xs text-gray-600 hover:bg-gray-50">Cancel</button>
-              <button onClick={handleSend} disabled={sending || !selectedContact || (sendTemplate?.headerType === "IMAGE" && !canSendWithHeader)}
+              <button onClick={handleSend} disabled={sending || !selectedContact || (sendTemplate?.headerType === "IMAGE" && !sendTemplate.header?.includes("cloudinary.com") && !headerUrl)}
                 className="flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-60">
                 {sending && <Loader2 size={12} className="animate-spin" />}
                 {sending ? "Sending..." : "Send"}
@@ -568,10 +586,10 @@ export default function TemplatesPage() {
                   </label>
                   {form.headerType === "IMAGE" ? (
                     <div>
-                      {form.header ? (
+                      {form.header?.trim() ? (
                         <div className="relative rounded-lg overflow-hidden border border-gray-200">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={form.header} alt="header preview" className="w-full h-32 object-cover" />
+                          <img src={form.header.trim()} alt="header preview" className="w-full h-32 object-cover" />
                           <button type="button" onClick={() => setForm(f => ({ ...f, header: "" }))}
                             className="absolute top-1.5 right-1.5 rounded-full bg-black/50 p-1 text-white hover:bg-black/70">
                             <X size={12} />
@@ -608,10 +626,42 @@ export default function TemplatesPage() {
 
               <div>
                 <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Body <span className="text-green-600">*</span></label>
-                <textarea required value={form.body} onChange={e => setForm(f => ({ ...f, body: e.target.value }))}
+                <textarea required value={form.body} onChange={e => handleBodyChange(e.target.value)}
                   rows={4} placeholder="Hi {{1}}, your order {{2}} has been confirmed! 🎉"
                   className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-green-500 focus:bg-white focus:ring-2 focus:ring-green-100 transition resize-none" />
-                <p className="mt-1 text-xs text-gray-400">Use {"{{1}}, {{2}}"} for dynamic variables</p>
+                <p className="mt-1 text-xs text-gray-400">Use <code className="bg-gray-100 px-1 rounded">{"{{1}}, {{2}}"}</code> for dynamic variables</p>
+                {/^\{\{\d+\}\}/.test(form.body.trim()) || /\{\{\d+\}\}$/.test(form.body.trim()) ? (
+                  <p className="mt-1 text-xs text-red-500">⚠️ Variable cannot be at the start or end of body. Add text around it.</p>
+                ) : null}
+
+                {/* Variable example inputs */}
+                {Object.keys(bodyVarLabels).length > 0 && (
+                  <div className="mt-3 rounded-xl border border-green-100 bg-green-50 p-3 space-y-2">
+                    <p className="text-xs font-semibold text-green-700 mb-1">Variable Sample Values <span className="font-normal text-green-600">(shown in preview &amp; sent to WhatsApp)</span></p>
+                    {Object.keys(bodyVarLabels).sort().map(key => (
+                      <div key={key} className="flex items-center gap-2">
+                        <span className="w-10 shrink-0 rounded bg-green-200 px-1.5 py-0.5 text-center text-[11px] font-bold text-green-800">{`{{${key}}}`}</span>
+                        <input
+                          value={bodyVarLabels[key]}
+                          onChange={e => setBodyVarLabels(prev => ({ ...prev, [key]: e.target.value }))}
+                          placeholder={`Sample value for {{${key}}}`}
+                          className="flex-1 rounded-lg border border-green-200 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-green-500"
+                        />
+                      </div>
+                    ))}
+                    {/* Live preview */}
+                    <div className="mt-2 rounded-lg border border-green-200 bg-white px-3 py-2">
+                      <p className="text-[11px] font-semibold text-gray-400 mb-1">Preview</p>
+                      <p className="text-xs text-gray-700 whitespace-pre-line" dangerouslySetInnerHTML={{
+                        __html: form.body.replace(/\{\{(\d+)\}\}/g, (_, n) =>
+                          bodyVarLabels[n]?.trim()
+                            ? `<span style="color:#15803d;font-weight:600">${bodyVarLabels[n]}</span>`
+                            : `<span style="color:#f87171;font-weight:600">{{${n}}}</span>`
+                        )
+                      }} />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>

@@ -4,7 +4,7 @@ import { verifyToken } from "@/lib/auth";
 
 export function getUser(req: NextRequest) {
   const token = req.cookies.get("token")?.value
-    ?? req.headers.get("authorization")?.split(" ")[1]; // fallback for backward compat
+    ?? req.headers.get("authorization")?.split(" ")[1];
   if (!token) return null;
   try { return verifyToken(token); } catch { return null; }
 }

@@ -75,6 +75,8 @@ export async function POST(req: NextRequest) {
       phone_number: b.phone_number,
     })) ?? Prisma.JsonNull;
 
+    const headerUrl = headerComp?.text ?? headerComp?.example?.header_url?.[0] ?? null;
+
     await prisma.template.upsert({
       where: {
         workspaceId_name_language: {
@@ -87,7 +89,8 @@ export async function POST(req: NextRequest) {
         metaTemplateId: t.id,
         status: t.status,
         category: t.category,
-        header: headerComp?.text ?? headerComp?.example?.header_url?.[0] ?? headerComp?.example?.header_handle?.[0] ?? null,
+        // Only update header if we have a real URL — don't overwrite Cloudinary URL with Meta handle
+        ...(headerUrl ? { header: headerUrl } : {}),
         headerType: headerComp?.format ?? null,
         body: bodyComp?.text ?? "",
         footer: footerComp?.text ?? null,
@@ -101,7 +104,7 @@ export async function POST(req: NextRequest) {
         category: t.category,
         language: t.language,
         status: t.status,
-        header: headerComp?.text ?? headerComp?.example?.header_url?.[0] ?? headerComp?.example?.header_handle?.[0] ?? null,
+        header: headerUrl,
         headerType: headerComp?.format ?? null,
         body: bodyComp?.text ?? "",
         footer: footerComp?.text ?? null,

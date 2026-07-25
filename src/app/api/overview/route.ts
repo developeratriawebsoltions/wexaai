@@ -62,20 +62,19 @@ export async function GET(req: NextRequest) {
     pct: totalDirection ? Math.round((item.count / totalDirection) * 100) : 0,
   }));
 
-  const topAgents = await Promise.all(
-    topAgentsGroup.map(async (entry: { assignedTo: string | null; _count: { id: number } }) => {
-      const agentUser = entry.assignedTo
-        ? await prisma.user.findUnique({ where: { id: entry.assignedTo } })
-        : null;
-      return {
-        id: entry.assignedTo ?? "",
-        name: agentUser?.name ?? "Unknown Agent",
-        conversations: entry._count.id,
-        resolution: "—",
-        rating: "—",
-      };
-    })
-  );
+  const agentIds = topAgentsGroup.map((e: { assignedTo: string | null }) => e.assignedTo).filter(Boolean) as string[];
+  const agentUsers = agentIds.length
+    ? await prisma.user.findMany({ where: { id: { in: agentIds } }, select: { id: true, name: true } })
+    : [];
+  const agentMap = Object.fromEntries(agentUsers.map((u) => [u.id, u.name]));
+
+  const topAgents = topAgentsGroup.map((entry: { assignedTo: string | null; _count: { id: number } }) => ({
+    id: entry.assignedTo ?? "",
+    name: entry.assignedTo ? (agentMap[entry.assignedTo] ?? "Unknown Agent") : "Unknown Agent",
+    conversations: entry._count.id,
+    resolution: "—",
+    rating: "—",
+  }));
 
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(now);
@@ -92,11 +91,7 @@ export async function GET(req: NextRequest) {
         prisma.message.count({ where: { workspaceId, direction: "inbound", createdAt: { gte: dayStart, lt: dayEnd } } }),
         prisma.message.count({ where: { workspaceId, direction: "outbound", createdAt: { gte: dayStart, lt: dayEnd } } }),
       ]);
-      return {
-        label: dayStart.toLocaleDateString("en", { weekday: "short" }),
-        inbound,
-        outbound,
-      };
+      return { label: dayStart.toLocaleDateString("en", { weekday: "short" }), inbound, outbound };
     })
   );
 

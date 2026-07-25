@@ -1,14 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getUser } from "@/lib/apiHelpers";
-
-async function getWorkspaceId(userId: string) {
-  const m = await prisma.workspaceMember.findFirst({
-    where: { userId },
-    select: { workspaceId: true },
-  });
-  return m?.workspaceId ?? null;
-}
+import { getUser, getWorkspaceId } from "@/lib/apiHelpers";
 
 // GET /api/inbox/conversations?status=open&search=xxx
 export async function GET(req: NextRequest) {

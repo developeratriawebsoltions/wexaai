@@ -341,6 +341,15 @@ model WebhookSettings {
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 }
 
+model OtpStore {
+  key       String   @id
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
 model ActivityLog {
   id          String    @id @default(cuid())
   workspaceId String

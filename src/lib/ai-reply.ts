@@ -67,7 +67,13 @@ export async function handleAiReply(
         console.error("[AI Reply] failed to parse Groq response", e);
         completion = {};
       }
-      if (!groqRes.ok) console.error("[AI Reply] Groq API error", groqRes.status, completion);
+      if (!groqRes.ok) {
+        if (groqRes.status === 429) {
+          console.warn("[AI Reply] GROQ rate limited — skipping reply");
+          return;
+        }
+        console.error("[AI Reply] Groq API error", groqRes.status, completion);
+      }
     } else {
       completion = await openai.chat.completions.create({
         model: modelToUse,

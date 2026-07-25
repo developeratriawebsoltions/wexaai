@@ -20,18 +20,28 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  console.log("[Webhook] Raw body:", JSON.stringify(body, null, 2));
 
-  const value = body?.entry?.[0]?.changes?.[0]?.value;
-  if (!value) return NextResponse.json({ status: "ok" });
+  // Respond to Meta immediately — must reply within 5s or Meta retries (causes duplicates)
+  const response = NextResponse.json({ status: "ok" });
+  processWebhook(body).catch((err) => console.error("[Webhook] processing error:", err));
+  return response;
+}
 
-  const phoneNumberId: string = value.metadata?.phone_number_id;
-  if (!phoneNumberId) return NextResponse.json({ status: "ok" });
+async function processWebhook(body: unknown) {
+  const value = (body as Record<string, unknown> | null)
+    ?.["entry"] instanceof Array
+    ? ((body as { entry: { changes: { value: unknown }[] }[] }).entry?.[0]?.changes?.[0]?.value)
+    : null;
+  if (!value) return;
+
+  const webhookValue = value as Record<string, unknown>;
+  const phoneNumberId: string = (webhookValue?.metadata as Record<string, string>)?.phone_number_id;
+  if (!phoneNumberId) return;
   console.log("[Webhook] phoneNumberId:", phoneNumberId);
 
   // ── Handle outbound delivery status updates ──
   // FIX: Do NOT early return — same webhook call can contain both statuses + messages
-  const statuses = value.statuses as Array<{ id: string; status: string; errors?: unknown[] }> | undefined;
+  const statuses = webhookValue.statuses as Array<{ id: string; status: string; errors?: unknown[] }> | undefined;
   if (statuses?.length) {
     for (const s of statuses) {
       console.log(`[Webhook] Status update id=${s.id} status=${s.status}`, s.errors ? `errors:${JSON.stringify(s.errors)}` : "");
@@ -44,7 +54,7 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Handle inbound messages ──
-  const messages = value.messages as Array<{
+  const messages = webhookValue.messages as Array<{
     type: string; from: string; id: string;
     text?: { body: string };
     button?: { text: string; payload: string };
@@ -60,7 +70,7 @@ export async function POST(req: NextRequest) {
   }> | undefined;
 
   console.log("[Webhook] messages:", JSON.stringify(messages, null, 2));
-  if (!messages?.length) return NextResponse.json({ status: "ok" });
+  if (!messages?.length) return;
 
   const account = await prisma.whatsAppAccount.findFirst({
     where: { phoneNumberId, status: "active" },
@@ -68,7 +78,7 @@ export async function POST(req: NextRequest) {
   });
   if (!account) {
     console.log("[Webhook] No active WA account for phoneNumberId:", phoneNumberId);
-    return NextResponse.json({ status: "ok" });
+    return;
   }
 
   const { workspaceId } = account;
@@ -153,7 +163,7 @@ export async function POST(req: NextRequest) {
     console.log("[Webhook] effectiveButtonPayload:", effectiveButtonPayload, "| text:", text);
 
     const contactName =
-      (value.contacts as Array<{ wa_id: string; profile?: { name?: string } }>)
+      (webhookValue.contacts as Array<{ wa_id: string; profile?: { name?: string } }>)
         ?.find((c) => normalizePhone(c.wa_id) === contactPhone)
         ?.profile?.name ?? null;
 
@@ -216,5 +226,4 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ status: "ok" });
 }

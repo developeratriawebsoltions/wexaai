@@ -37,24 +37,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   if (template.headerType) {
     const isMedia = ["IMAGE", "VIDEO", "DOCUMENT"].includes(template.headerType);
-
     if (isMedia) {
-      // Use fresh headerUrl if provided, fallback to stored template.header
       const mediaLink = headerUrl || template.header;
-      if (!mediaLink) return NextResponse.json({ error: `Please provide a ${template.headerType} URL to send this template` }, { status: 400 });
+      if (!mediaLink) return NextResponse.json({ error: `Please provide an image URL to send this template.` }, { status: 400 });
       const mediaKey = template.headerType.toLowerCase() as "image" | "video" | "document";
       components.push({
         type: "header",
         parameters: [{ type: mediaKey, [mediaKey]: { link: mediaLink } } as MetaParam],
       });
     }
-    // For TEXT headers: don't send header component — Meta uses the template's stored text
   }
 
-  if (variables?.body?.length) {
+  const filledVars = (variables?.body ?? []).filter((v: string) => v.trim() !== "");
+  if (filledVars.length) {
     components.push({
       type: "body",
-      parameters: variables.body.map((v: string) => ({ type: "text", text: v })),
+      parameters: filledVars.map((v: string) => ({ type: "text", text: v })),
     });
   }
 
@@ -167,7 +165,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   return NextResponse.json({ success: true });
 }
 
-// PUT /api/templates/[id] — update template (DB)
+// PUT /api/templates/[id] — update template on Meta + DB
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = getUser(req);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -181,33 +179,80 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const body = await req.json();
 
-  const template = await prisma.template.findFirst({ where: { id, workspaceId: membership.workspaceId } });
+  const [template, wa] = await Promise.all([
+    prisma.template.findFirst({ where: { id, workspaceId: membership.workspaceId } }),
+    prisma.whatsAppAccount.findUnique({ where: { workspaceId: membership.workspaceId } }),
+  ]);
   if (!template) return NextResponse.json({ error: "Template not found" }, { status: 404 });
+  if (!wa || wa.status !== "active") return NextResponse.json({ error: "WhatsApp not connected" }, { status: 400 });
 
-  const { name, category, language, header, headerType, body: bodyText, footer, buttons } = body;
+  const { header, headerType, body: bodyText, footer, buttons } = body;
 
+  // Build Meta components
+  type MetaComponent = { type: string; format?: string; text?: string; example?: { header_url?: string[]; body_text?: string[][] }; buttons?: unknown[] };
+  const components: MetaComponent[] = [];
+
+  if (headerType) {
+    const isMedia = ["IMAGE", "VIDEO", "DOCUMENT"].includes(headerType);
+    if (isMedia && header) {
+      components.push({ type: "HEADER", format: headerType, example: { header_url: [header] } });
+    } else if (!isMedia && header) {
+      components.push({ type: "HEADER", format: "TEXT", text: header });
+    }
+  }
+
+  const newBody = bodyText ?? template.body;
+  const bodyVarMatches = [...newBody.matchAll(/\{\{(\d+)\}\}/g)];
+  const bodyVarCount = bodyVarMatches.length ? Math.max(...bodyVarMatches.map((m: RegExpMatchArray) => parseInt(m[1]))) : 0;
+  components.push({
+    type: "BODY",
+    text: newBody,
+    ...(bodyVarCount > 0 ? { example: { body_text: [Array(bodyVarCount).fill("sample")] } } : {}),
+  });
+
+  if (footer) components.push({ type: "FOOTER", text: footer });
+
+  type ButtonInput = { type: string; text: string; url?: string; phone_number?: string };
+  if (buttons?.length) {
+    components.push({
+      type: "BUTTONS",
+      buttons: buttons.map((b: ButtonInput) => {
+        if (b.type === "URL") return { type: "URL", text: b.text, url: b.url };
+        if (b.type === "PHONE_NUMBER") return { type: "PHONE_NUMBER", text: b.text, phone_number: b.phone_number };
+        return { type: "QUICK_REPLY", text: b.text };
+      }),
+    });
+  }
+
+  // Send PATCH to Meta
+  const metaRes = await fetch(`https://graph.facebook.com/v21.0/${template.metaTemplateId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${wa.accessToken}` },
+    body: JSON.stringify({ components }),
+  });
+  const metaData = await metaRes.json();
+  if (!metaRes.ok || metaData.error) {
+    console.error("[Template Update] Meta error:", JSON.stringify(metaData, null, 2));
+    return NextResponse.json({ error: metaData.error?.error_user_msg ?? metaData.error?.message ?? "Meta API error" }, { status: 400 });
+  }
+
+  // Update DB
   try {
     const updated = await prisma.template.update({
       where: { id },
       data: {
-        name: name ?? template.name,
-        category: category ?? template.category,
-        language: language ?? template.language,
         header: header ?? null,
         headerType: headerType ?? null,
-        body: bodyText ?? template.body,
+        body: newBody,
         footer: footer ?? null,
         buttons: buttons !== undefined ? buttons : template.buttons,
-        // Mark edited templates as pending approval
         status: "PENDING",
         rejectedReason: null,
       },
     });
-
     return NextResponse.json(updated);
   } catch (err: any) {
-    console.error("[Template Update] error:", err?.message ?? err);
-    const msg = err?.meta?.cause ?? err?.message ?? "Failed to update";
-    return NextResponse.json({ error: msg }, { status: 400 });
+    console.error("[Template Update] DB error:", err?.message ?? err);
+    return NextResponse.json({ error: err?.message ?? "Failed to update" }, { status: 400 });
   }
 }

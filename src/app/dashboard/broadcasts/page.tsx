@@ -66,6 +66,7 @@ export default function BroadcastsPage() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [headerUrl, setHeaderUrl] = useState("");
+  const [bodyVariables, setBodyVariables] = useState<Record<string, string>>({});
   const [audience, setAudience] = useState("all");
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [contactSearch, setContactSearch] = useState("");
@@ -118,13 +119,24 @@ export default function BroadcastsPage() {
   useEffect(() => { fetchBroadcasts(); }, []);
 
   useEffect(() => {
-    if (!selectedTemplate || selectedTemplate.headerType !== "IMAGE") {
+    if (!selectedTemplate) {
+      setHeaderUrl("");
+      setCanSendHeader(true);
+      setBodyVariables({});
+      return;
+    }
+    // Extract {{1}}, {{2}} etc. from body
+    const vars = [...(selectedTemplate.body.matchAll(/\{\{(\d+)\}\}/g))].map((m) => m[1]);
+    const unique = [...new Set(vars)];
+    setBodyVariables(Object.fromEntries(unique.map((k) => [k, ""])));
+
+    if (selectedTemplate.headerType !== "IMAGE") {
       setHeaderUrl("");
       setCanSendHeader(true);
       return;
     }
-    setHeaderUrl(selectedTemplate.header ?? "");
-    setCanSendHeader(Boolean(selectedTemplate.header));
+    setHeaderUrl("");
+    setCanSendHeader(false);
   }, [selectedTemplate]);
 
   useEffect(() => {
@@ -138,6 +150,7 @@ export default function BroadcastsPage() {
     setCampaignName("");
     setSelectedTemplate(null);
     setHeaderUrl("");
+    setBodyVariables({});
     setAudience("all");
     setContactSearch("");
     setSelectedContactIds([]);
@@ -198,6 +211,7 @@ export default function BroadcastsPage() {
           audience,
           contactIds: audience === "selected" ? selectedContactIds : undefined,
           headerUrl: selectedTemplate?.headerType === "IMAGE" ? headerUrl.trim() || undefined : undefined,
+          bodyVariables: Object.keys(bodyVariables).length > 0 ? bodyVariables : undefined,
         }),
       });
       const data = await res.json();
@@ -384,9 +398,9 @@ export default function BroadcastsPage() {
               {/* Step 1 — Select Template */}
               {step === 1 && (
                 <div>
-                  <label className="mb-2 block text-xs font-medium text-gray-600">Select Template</label>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">Select Template</label>
                   {templates.length === 0 ? (
-                    <p className="rounded-lg bg-yellow-50 px-3 py-3 text-xs text-yellow-700">
+                    <p className="rounded-lg bg-yellow-50 px-3 py-3 text-sm text-yellow-700">
                       No approved templates found. Please create and get a template approved first.
                     </p>
                   ) : (
@@ -401,22 +415,46 @@ export default function BroadcastsPage() {
                               : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
                           }`}
                         >
-                          <p className="text-xs font-semibold text-gray-800">{t.name}</p>
-                          <p className="mt-0.5 text-[11px] text-gray-400 line-clamp-2">{t.body}</p>
+                          <p className="text-sm font-semibold text-gray-800">{t.name}</p>
+                          <p className="mt-0.5 text-sm text-gray-500 line-clamp-2">
+                            {t.body.replace(/\{\{(\d+)\}\}/g, (_, n) => `{{${n}}}`)}
+                          </p>
                         </button>
                       ))}
                     </div>
                   )}
 
+                  {/* Body variable inputs */}
+                  {Object.keys(bodyVariables).length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      <label className="block text-xs font-semibold text-gray-700">Template Variables</label>
+                      <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-2">
+                        <p className="text-[11px] text-gray-400 mb-1" dangerouslySetInnerHTML={{ __html: "Preview: " + selectedTemplate!.body.replace(/\{\{(\d+)\}\}/g, (_, n) => bodyVariables[n]?.trim() ? `<span style="color:#15803d;font-weight:600">${bodyVariables[n]}</span>` : `<span style="color:#f87171">{{${n}}}</span>`) }} />
+                        {Object.keys(bodyVariables).sort().map((key) => (
+                          <div key={key} className="flex items-center gap-2">
+                            <span className="w-8 shrink-0 rounded bg-green-100 px-1.5 py-0.5 text-center text-[11px] font-bold text-green-700">{`{{${key}}}`}</span>
+                            <input
+                              value={bodyVariables[key]}
+                              onChange={(e) => setBodyVariables((prev) => ({ ...prev, [key]: e.target.value }))}
+                              placeholder={`Value for {{${key}}}`}
+                              className="flex-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs outline-none focus:border-green-500"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {selectedTemplate?.headerType === "IMAGE" && (
                     <div className="mt-3">
-                      <label className="mb-1.5 block text-xs font-medium text-gray-600">Header Image URL (optional)</label>
+                      <label className="mb-1.5 block text-sm font-semibold text-gray-700">Header Image URL (optional)</label>
                       <div className="flex items-center gap-2">
                         <input
                           value={headerUrl}
                           onChange={(e) => {
-                            setHeaderUrl(e.target.value);
-                            setCanSendHeader(Boolean(e.target.value.trim()));
+                            const value = e.target.value;
+                            setHeaderUrl(value);
+                            setCanSendHeader(Boolean(value.trim()));
                           }}
                           placeholder="https://your-public-domain.com/image.jpg"
                           className="flex-1 rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-green-500"
@@ -425,7 +463,7 @@ export default function BroadcastsPage() {
                           type="button"
                           onClick={() => headerFileInputRef.current?.click()}
                           disabled={uploadingHeader}
-                          className="flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-2 text-[11px] text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+                          className="flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-2 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-60"
                         >
                           {uploadingHeader ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
                           Upload
@@ -443,8 +481,21 @@ export default function BroadcastsPage() {
                         />
                       </div>
                       <p className="mt-2 rounded-md border-2 border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
-                        Note: Upload an image before sending.
+                        {selectedTemplate?.header ? "Upload a new image to enable Next. Existing template header will still be used if you move ahead." : "Upload an image before sending."}
                       </p>
+
+                      {(headerUrl.trim() || selectedTemplate?.header?.trim()) && (
+                        <div className="mt-4">
+                          <p className="mb-2 text-sm font-semibold text-gray-700">Image Preview</p>
+                          <div className="overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
+                            <img
+                              src={(headerUrl.trim() || selectedTemplate?.header?.trim()) as string}
+                              alt="Header preview"
+                              className="h-48 w-full object-contain"
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -579,7 +630,8 @@ export default function BroadcastsPage() {
               {step < STEPS.length - 1 ? (
                 <button
                   onClick={nextStep}
-                  className="flex items-center gap-1 rounded-lg bg-green-600 px-4 py-2 text-xs font-semibold text-white hover:bg-green-700"
+                  disabled={step === 1 && selectedTemplate?.headerType === "IMAGE" && !canSendHeader}
+                  className="flex items-center gap-1 rounded-lg bg-green-600 px-4 py-2 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-60 disabled:hover:bg-green-600"
                 >
                   Next <ChevronRight size={13} />
                 </button>

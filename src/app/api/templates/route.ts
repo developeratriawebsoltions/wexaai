@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "WhatsApp not connected. Please connect WhatsApp first." }, { status: 400 });
   }
 
-  const { name, category, language, header, headerType, body, footer, buttons } = await req.json();
+  const { name, category, language, header, headerType, body, footer, buttons, bodyExamples } = await req.json();
   // Meta WhatsApp template API uses locale codes like "en" or "en_US"
   // Normalize common variants to Meta-accepted codes
   const languageMap: Record<string, string> = {
@@ -160,14 +160,31 @@ export async function POST(req: NextRequest) {
   const bodyVarCount = bodyVarMatches.length
     ? Math.max(...bodyVarMatches.map((m: RegExpMatchArray) => parseInt(m[1])))
     : 0;
-  const hasMediaHeader = headerType && ["IMAGE", "VIDEO", "DOCUMENT"].includes(headerType) && header;
 
-  const bodyExample = bodyVarCount > 0 ? [Array(bodyVarCount).fill("sample")] : [["sample"]];
+  // Validate: variable cannot be at the very start or end of body
+  const trimmedBody = body.trim();
+  if (/^\{\{\d+\}\}/.test(trimmedBody)) {
+    return NextResponse.json(
+      { error: "Body cannot start with a variable like {{1}}. Add some text before it." },
+      { status: 400 }
+    );
+  }
+  if (/\{\{\d+\}\}$/.test(trimmedBody)) {
+    return NextResponse.json(
+      { error: "Body cannot end with a variable like {{1}}. Add some text after it." },
+      { status: 400 }
+    );
+  }
+
+  // Build example values: use user-provided samples, fallback to "sample_N"
+  const exampleValues = Array.from({ length: bodyVarCount }, (_, i) =>
+    (bodyExamples?.[i] as string)?.trim() || `sample_${i + 1}`
+  );
 
   components.push({
     type: "BODY",
     text: body,
-    ...(bodyVarCount > 0 || hasMediaHeader ? { example: { body_text: bodyExample } } : {}),
+    ...(bodyVarCount > 0 ? { example: { body_text: [exampleValues] } } : {}),
   });
 
   if (footer) {

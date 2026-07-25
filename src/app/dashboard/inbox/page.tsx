@@ -112,6 +112,10 @@ export default function InboxPage() {
   const [sending, setSending] = useState(false);
   const [loadingConvs, setLoadingConvs] = useState(true);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const msgContainerRef = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState("");
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<ConvStatus | "all">("all");
@@ -155,8 +159,9 @@ export default function InboxPage() {
     if (res.ok) {
       const data = await res.json();
       setMessages(data.messages);
+      setNextCursor(data.nextCursor ?? null);
+      setHasMore(data.hasMore ?? false);
       setActiveConv(data.conversation);
-      // Update unread in list
       setConversations((prev) =>
         prev.map((c) => (c.id === id ? { ...c, unreadCount: 0 } : c))
       );
@@ -164,10 +169,34 @@ export default function InboxPage() {
     setLoadingMsgs(false);
   }, []);
 
+  // Load older messages (pagination)
+  const loadOlderMessages = useCallback(async () => {
+    if (!activeId || !nextCursor || loadingOlder) return;
+    setLoadingOlder(true);
+    const container = msgContainerRef.current;
+    const prevScrollHeight = container?.scrollHeight ?? 0;
+    const res = await authFetch(`/api/inbox/conversations/${activeId}?cursor=${nextCursor}`);
+    if (res.ok) {
+      const data = await res.json();
+      setMessages((prev) => [...data.messages, ...prev]);
+      setNextCursor(data.nextCursor ?? null);
+      setHasMore(data.hasMore ?? false);
+      // Restore scroll position so user stays at same spot
+      requestAnimationFrame(() => {
+        if (container) {
+          container.scrollTop = container.scrollHeight - prevScrollHeight;
+        }
+      });
+    }
+    setLoadingOlder(false);
+  }, [activeId, nextCursor, loadingOlder]);
+
   // Open conversation
   const openConversation = (conv: Conversation) => {
     setActiveId(conv.id);
     setMessages([]);
+    setNextCursor(null);
+    setHasMore(false);
     setSendError("");
     setMobileView("chat");
     fetchMessages(conv.id);
@@ -582,6 +611,7 @@ export default function InboxPage() {
 
           {/* Messages — WhatsApp chat background */}
           <div
+            ref={msgContainerRef}
             className="flex-1 min-h-0 overflow-y-auto px-2 sm:px-4 py-2 sm:py-4 space-y-1"
             style={{
               backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23c8d6c8' fill-opacity='0.25'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
@@ -598,7 +628,25 @@ export default function InboxPage() {
                 <p className="text-sm sm:text-base font-bold text-gray-700">No messages in this conversation</p>
               </div>
             ) : (
-              groupedMessages.map(({ date, msgs }) => (
+              <>
+              {/* Load older messages button */}
+              {hasMore && (
+                <div className="flex justify-center mb-2">
+                  <button
+                    onClick={loadOlderMessages}
+                    disabled={loadingOlder}
+                    className="flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-xs font-semibold text-gray-600 shadow-sm hover:bg-white disabled:opacity-50 transition-colors"
+                  >
+                    {loadingOlder ? (
+                      <div className="h-3 w-3 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
+                    ) : (
+                      <RefreshCw size={12} />
+                    )}
+                    {loadingOlder ? "Loading..." : "Load older messages"}
+                  </button>
+                </div>
+              )}
+              {groupedMessages.map(({ date, msgs }) => (
                 <div key={date}>
                   {/* Date separator */}
                   <div className="flex justify-center my-2 sm:my-3">
@@ -733,9 +781,10 @@ export default function InboxPage() {
                     );
                   })}
                 </div>
-              ))
+              ))}
+              <div ref={bottomRef} />
+              </>
             )}
-            <div ref={bottomRef} />
           </div>
 
           {selectedImageUrl && (

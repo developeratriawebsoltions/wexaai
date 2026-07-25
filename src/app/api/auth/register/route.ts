@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
   if (existing)
     return NextResponse.json({ error: "Email already in use" }, { status: 409 });
 
-  const validOtp = verifyOtp(email, "signup", otp);
+  const validOtp = await verifyOtp(email, "signup", otp);
   if (!validOtp) {
     return NextResponse.json({ error: "Invalid or expired OTP" }, { status: 401 });
   }
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  clearOtp(email, "signup");
+  await clearOtp(email, "signup");
 
   const token = signToken({ id: user.id, email: user.email });
 

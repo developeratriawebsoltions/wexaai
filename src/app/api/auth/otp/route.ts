@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const { code, expiresAt } = createOtp(email, purpose);
+  const { code, expiresAt } = await createOtp(email, purpose);
 
   try {
     await sendOtpEmail({ to: email, code, purpose });
