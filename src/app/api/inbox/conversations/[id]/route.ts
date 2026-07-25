@@ -69,11 +69,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!workspaceId) return NextResponse.json({ error: "No workspace" }, { status: 404 });
 
   const { id } = await params;
-  const { status } = await req.json();
+  const body = await req.json();
+  const { status, assignedUserId } = body;
+
+  const data: { status?: string; assignedTo?: string | null } = {};
+  if (status !== undefined) data.status = status;
+  if (assignedUserId !== undefined) data.assignedTo = assignedUserId;
 
   const updated = await prisma.conversation.updateMany({
     where: { id, workspaceId },
-    data: { status },
+    data,
   });
 
   if (!updated.count) return NextResponse.json({ error: "Not found" }, { status: 404 });

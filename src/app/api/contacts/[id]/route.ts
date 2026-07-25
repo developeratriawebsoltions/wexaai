@@ -29,7 +29,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   const { id } = await params;
   const body = await req.json();
-  const { name, email, tags } = body;
+  const { name, email, tags, optedOut, customFields } = body;
 
   const contact = await prisma.contact.updateMany({
     where: { id, workspaceId },
@@ -37,6 +37,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       ...(name !== undefined ? { name } : {}),
       ...(email !== undefined ? { email } : {}),
       ...(tags !== undefined ? { tags } : {}),
+      ...(optedOut !== undefined ? { optedOut } : {}),
+      ...(customFields !== undefined ? { customFields } : {}),
     },
   });
 

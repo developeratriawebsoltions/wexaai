@@ -1,6 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+export async function GET(req: NextRequest) {
+  const workspaceId = req.nextUrl.searchParams.get('workspaceId');
+  if (!workspaceId) return NextResponse.json({ error: 'Workspace ID required' }, { status: 400 });
+
+  const settings = await prisma.notificationSettings.findUnique({ where: { workspaceId } });
+  return NextResponse.json(settings ?? {
+    emailNotifications: true,
+    newConversation: true,
+    whatsappAlerts: false,
+    broadcastCompleted: true,
+    paymentFailed: true,
+  });
+}
+
 export async function PATCH(req: NextRequest) {
   try {
     const workspaceId = req.nextUrl.searchParams.get('workspaceId');

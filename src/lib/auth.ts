@@ -8,8 +8,8 @@ export const hashPassword = (password: string) => bcrypt.hash(password, 10);
 export const comparePassword = (password: string, hash: string) =>
   bcrypt.compare(password, hash);
 
-export const signToken = (payload: { id: string; email: string }) =>
+export const signToken = (payload: { id: string; email: string; role?: string }) =>
   jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
 
 export const verifyToken = (token: string) =>
-  jwt.verify(token, JWT_SECRET) as { id: string; email: string };
+  jwt.verify(token, JWT_SECRET) as { id: string; email: string; role?: string };

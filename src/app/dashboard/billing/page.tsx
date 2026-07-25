@@ -67,7 +67,6 @@ declare global {
 }
 
 export default function BillingPage() {
-  const { token } = useAuth();
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [usage, setUsage] = useState<Usage | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -80,7 +79,6 @@ export default function BillingPage() {
   const headers = { "Content-Type": "application/json" };
 
   useEffect(() => {
-    if (!token) return;
     Promise.all([
       fetch("/api/billing/subscription", { credentials: "include" }).then((r) => r.json()),
       fetch("/api/billing/usage", { credentials: "include" }).then((r) => r.json()),
@@ -93,7 +91,7 @@ export default function BillingPage() {
       setInvoices(inv.invoices ?? []);
       setLoading(false);
     });
-  }, [token]);
+  }, []);
 
   async function handleUpgrade(planId: string) {
     setUpgrading(planId);

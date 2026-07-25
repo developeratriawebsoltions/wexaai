@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const search = searchParams.get("search") ?? "";
   const tag = searchParams.get("tag") ?? "";
+  const optedOut = searchParams.get("optedOut");
   const page = Math.max(1, parseInt(searchParams.get("page") ?? "1"));
   const limit = Math.min(100, parseInt(searchParams.get("limit") ?? "20"));
   const skip = (page - 1) * limit;
@@ -27,6 +28,7 @@ export async function GET(req: NextRequest) {
       ],
     } : {}),
     ...(tag ? { tags: { has: tag } } : {}),
+    ...(optedOut !== null ? { optedOut: optedOut === "true" } : {}),
   };
 
   const [contacts, total] = await Promise.all([
@@ -35,7 +37,7 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: "desc" },
       skip,
       take: limit,
-      select: { id: true, name: true, phone: true, email: true, tags: true, createdAt: true },
+      select: { id: true, name: true, phone: true, email: true, tags: true, optedOut: true, customFields: true, createdAt: true },
     }),
     prisma.contact.count({ where }),
   ]);

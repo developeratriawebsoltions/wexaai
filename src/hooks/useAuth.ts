@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 
 export interface AuthUser {
@@ -14,6 +14,7 @@ export interface AuthWorkspace {
   name: string;
   slug: string;
   plan?: string;
+  role?: string;
 }
 
 export function useAuth() {
@@ -22,12 +23,9 @@ export function useAuth() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [workspace, setWorkspace] = useState<AuthWorkspace | null>(null);
   const [loading, setLoading] = useState(true);
-  const hasFetched = useRef(false);
+  const token = !loading && Boolean(user || workspace);
 
   useEffect(() => {
-    if (hasFetched.current) return;
-    hasFetched.current = true;
-
     const isDashboard = pathname?.startsWith("/dashboard") ?? false;
 
     fetch("/api/user/profile", { credentials: "include" })
@@ -55,10 +53,10 @@ export function useAuth() {
 
   const logout = async () => {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    setUser(null);
+    setWorkspace(null);
     router.replace("/login");
   };
 
-  const token = "cookie";
-
-  return { token, user, workspace, loading, logout };
+  return { user, workspace, loading, token, logout };
 }

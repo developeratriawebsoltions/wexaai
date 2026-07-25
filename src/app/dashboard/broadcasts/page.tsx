@@ -51,7 +51,7 @@ const FILTERS = ["All", "completed", "sending", "pending", "failed"];
 const STEPS = ["Campaign", "Template", "Contacts", "Send"];
 
 export default function BroadcastsPage() {
-  const { token } = useAuth();
+  const { token, loading: authLoading } = useAuth();
 
   // List state
   const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
@@ -116,7 +116,11 @@ export default function BroadcastsPage() {
     }
   };
 
-  useEffect(() => { fetchBroadcasts(); }, []);
+  useEffect(() => {
+    if (!authLoading && token) {
+      fetchBroadcasts();
+    }
+  }, [authLoading, token]);
 
   useEffect(() => {
     if (!selectedTemplate) {

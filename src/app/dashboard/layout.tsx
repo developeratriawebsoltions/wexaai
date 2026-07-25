@@ -11,24 +11,25 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 
 const navItems = [
-  { href: "/", label: "Home", icon: Home },
-  { href: "/dashboard/inbox", label: "Inbox", icon: Inbox },
-  { href: "/dashboard/overview", label: "Dashboard", icon: Home },
-  { href: "/dashboard/contacts", label: "Contacts", icon: Users },
-  { href: "/dashboard/broadcasts", label: "Broadcasts", icon: Radio },
-  { href: "/dashboard/templates", label: "Templates", icon: FileText },
-  { href: "/dashboard/ai-agent", label: "AI Agent", icon: Bot },
-  { href: "/dashboard/flows", label: "Flows", icon: GitBranch },
-  { href: "/dashboard/team", label: "Team", icon: UsersRound },
-  { href: "/dashboard/analytics", label: "Analytics", icon: BarChart2 },
-  { href: "/dashboard/integrations", label: "Integrations", icon: Plug },
-  { href: "/dashboard/settings", label: "Settings", icon: Settings },
-  { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
+  { href: "/dashboard/profile",      label: "Profile",     icon: User,       roles: ["owner","manager","agent"] },
+  { href: "/dashboard/inbox",        label: "Inbox",        icon: Inbox,      roles: ["owner","manager","agent"] },
+  { href: "/dashboard/overview",     label: "Dashboard",   icon: Home,       roles: ["owner","manager"] },
+  { href: "/dashboard/contacts",     label: "Contacts",    icon: Users,      roles: ["owner","manager","agent"] },
+  { href: "/dashboard/broadcasts",   label: "Broadcasts",  icon: Radio,      roles: ["owner","manager"] },
+  { href: "/dashboard/templates",    label: "Templates",   icon: FileText,   roles: ["owner","manager"] },
+  { href: "/dashboard/ai-agent",     label: "AI Agent",    icon: Bot,        roles: ["owner","manager"] },
+  { href: "/dashboard/flows",        label: "Flows",       icon: GitBranch,  roles: ["owner","manager"] },
+  { href: "/dashboard/team",         label: "Team",        icon: UsersRound, roles: ["owner","manager"] },
+  { href: "/dashboard/analytics",    label: "Analytics",   icon: BarChart2,  roles: ["owner","manager"] },
+  { href: "/dashboard/integrations", label: "Integrations",icon: Plug,       roles: ["owner"] },
+  { href: "/dashboard/settings",     label: "Settings",    icon: Settings,   roles: ["owner"] },
+  { href: "/dashboard/billing",      label: "Billing",     icon: CreditCard, roles: ["owner"] },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, workspace, loading, logout } = useAuth();
+  const role = workspace?.role ?? "agent";
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -109,7 +110,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="mb-4 md:hidden" />
 
           <nav className="space-y-0.5 px-2 md:px-2">
-            {navItems.map(({ href, label, icon: Icon }) => {
+            {navItems.filter(item => item.roles.includes(role)).map(({ href, label, icon: Icon }) => {
               const active = pathname === href;
               return (
                 <Link
@@ -189,7 +190,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </div>
               <div className="min-w-0 flex-1 text-left">
                 <p className="truncate text-xs md:text-sm font-bold text-gray-900">{user?.name ?? "..."}</p>
-                <p className="truncate text-[10px] md:text-xs text-gray-500">{user?.email ?? "..."}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="truncate text-[10px] md:text-xs text-gray-500">{user?.email ?? "..."}</p>
+                  <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold capitalize ${
+                    role === "owner" ? "bg-purple-100 text-purple-700" :
+                    role === "manager" ? "bg-blue-100 text-blue-700" :
+                    "bg-gray-100 text-gray-500"
+                  }`}>{role}</span>
+                </div>
               </div>
               <ChevronDown size={13} className="text-gray-400 flex-shrink-0" />
             </button>

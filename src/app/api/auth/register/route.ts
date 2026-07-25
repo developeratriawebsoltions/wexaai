@@ -42,10 +42,10 @@ export async function POST(req: NextRequest) {
 
   await clearOtp(email, "signup");
 
-  const token = signToken({ id: user.id, email: user.email });
+  const token = signToken({ id: user.id, email: user.email, role: "owner" });
 
   const res = NextResponse.json(
-    { user: { id: user.id, name: user.name, email: user.email }, workspace: { id: workspace.id, name: workspace.name, slug: workspace.slug } },
+    { user: { id: user.id, name: user.name, email: user.email }, workspace: { id: workspace.id, name: workspace.name, slug: workspace.slug, role: "owner" } },
     { status: 201 }
   );
 

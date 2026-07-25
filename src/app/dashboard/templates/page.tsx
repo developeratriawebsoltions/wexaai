@@ -39,7 +39,7 @@ const DEFAULT_FORM = {
 };
 
 export default function TemplatesPage() {
-  const { token, loading: authLoading } = useAuth();
+  const { loading: authLoading } = useAuth();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [tab, setTab] = useState("ALL");
   const [search, setSearch] = useState("");
@@ -67,7 +67,6 @@ export default function TemplatesPage() {
   const sendFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const fetchTemplates = useCallback(async () => {
-    if (!token) return;
     setLoading(true);
     const params = new URLSearchParams();
     if (tab !== "ALL") params.set("status", tab);
@@ -78,14 +77,13 @@ export default function TemplatesPage() {
     const data = await res.json();
     setTemplates(Array.isArray(data) ? data : []);
     setLoading(false);
-  }, [token, tab, search]);
+  }, [tab, search]);
 
   useEffect(() => {
     if (!authLoading) fetchTemplates();
   }, [authLoading, fetchTemplates]);
 
   async function handleSync() {
-    if (!token) return;
     setSyncing(true);
     await fetch("/api/templates/sync", {
       method: "POST",
@@ -96,7 +94,7 @@ export default function TemplatesPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!token || !confirm("Delete this template?")) return;
+    if (!confirm("Delete this template?")) return;
     setDeletingId(id);
     await fetch(`/api/templates/${id}`, {
       method: "DELETE",
@@ -108,7 +106,6 @@ export default function TemplatesPage() {
 
   async function handleCreate(e: React.FormEvent) {
     e?.preventDefault();
-    if (!token) return;
     setCreating(true);
     setError("");
 
@@ -214,13 +211,12 @@ export default function TemplatesPage() {
   }
 
   const fetchContacts = useCallback(async (q: string) => {
-    if (!token) return;
     const res = await fetch(`/api/contacts?search=${encodeURIComponent(q)}&limit=20`, {
       credentials: "include",
     });
     const data = await res.json();
     setContacts(Array.isArray(data.contacts) ? data.contacts : []);
-  }, [token]);
+  }, []);
 
   useEffect(() => {
     if (sendTemplate) fetchContacts(contactSearch);
@@ -259,7 +255,7 @@ export default function TemplatesPage() {
   }
 
   async function handleSend() {
-    if (!token || !sendTemplate || !selectedContact) return;
+    if (!sendTemplate || !selectedContact) return;
     setSending(true);
     setSendError("");
     const res = await fetch(`/api/templates/${sendTemplate.id}`, {

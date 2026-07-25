@@ -23,31 +23,31 @@ export default function TeamPage() {
   const [inviting, setInviting] = useState(false);
   const [error, setError] = useState("");
 
-  const fetchMembers = () => {
-    if (!token || !workspace) return;
-    fetch(`/api/workspace/members?workspaceId=${workspace.id}`, {
-      credentials: "include",
-    })
+  const fetchMembers = (wsId: string) => {
+    fetch(`/api/workspace/members?workspaceId=${wsId}`, { credentials: "include" })
       .then((r) => r.json())
-      .then((data) => { setMembers(Array.isArray(data) ? data : []); setLoading(false); });
+      .then((data) => { setMembers(Array.isArray(data) ? data : []); setLoading(false); })
+      .catch(() => setLoading(false));
   };
 
-  useEffect(() => { fetchMembers(); }, [token, workspace]);
+  useEffect(() => {
+    if (workspace?.id) fetchMembers(workspace.id);
+  }, [workspace?.id]);
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     setInviting(true); setError("");
-    const res = await fetch("/api/workspace/members", {
+    const res = await fetch("/api/workspace/invite", {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ workspaceId: workspace?.id, email: inviteEmail, role: inviteRole }),
+      body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
     });
     const data = await res.json();
     setInviting(false);
     if (!res.ok) { setError(data.error); return; }
     setShowInvite(false); setInviteEmail(""); setInviteRole("agent");
-    fetchMembers();
+    if (workspace?.id) fetchMembers(workspace.id);
   };
 
   const handleRemove = async (userId: string) => {
@@ -58,7 +58,7 @@ export default function TeamPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ workspaceId: workspace?.id, userId }),
     });
-    fetchMembers();
+    if (workspace?.id) fetchMembers(workspace.id);
   };
 
   return (
@@ -98,7 +98,7 @@ export default function TeamPage() {
               </thead>
               <tbody>
                 {members.map((m) => {
-                  const initials = m.user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+                  const initials = (m.user.name ?? m.user.email ?? "?").slice(0, 2).toUpperCase();
                   return (
                     <tr key={m.id} className="border-b border-gray-50 hover:bg-gray-50">
                       <td className="px-5 py-3">
@@ -175,7 +175,7 @@ export default function TeamPage() {
                   Cancel
                 </button>
                 <button type="submit" disabled={inviting} className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-60">
-                  {inviting ? "Inviting..." : "Invite"}
+                  {inviting ? "Sending..." : "Send Invite"}
                 </button>
               </div>
             </form>

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Search, Edit2, Trash2, X, Plus, RefreshCw, Upload, Download, CheckCircle2, AlertCircle } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 interface Contact {
   id: string;
@@ -331,6 +332,8 @@ function ContactModal({ contact, onClose, onSaved }: ContactModalProps) {
 }
 
 export default function ContactsPage() {
+  const { workspace } = useAuth();
+  const role = workspace?.role ?? "agent";
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -415,7 +418,7 @@ export default function ContactsPage() {
               </h2>
             </div>
             <div className="flex items-center gap-2">
-              {selected.length > 0 && (
+              {selected.length > 0 && role !== "agent" && (
                 <button onClick={deleteSelected}
                   className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100">
                   Delete ({selected.length})
@@ -520,10 +523,12 @@ export default function ContactsPage() {
                       <div className="flex items-center gap-2 text-gray-400">
                         <button onClick={() => setModal({ open: true, contact: c })}
                           className="hover:text-green-600"><Edit2 size={14} /></button>
-                        <button onClick={() => deleteContact(c.id)} disabled={deleting === c.id}
-                          className="hover:text-red-500 disabled:opacity-40">
-                          <Trash2 size={14} />
-                        </button>
+                        {role !== "agent" && (
+                          <button onClick={() => deleteContact(c.id)} disabled={deleting === c.id}
+                            className="hover:text-red-500 disabled:opacity-40">
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

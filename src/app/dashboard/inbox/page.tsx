@@ -5,7 +5,9 @@ import {
   Search, Send, CheckCheck, Check, Clock, RefreshCw,
   MessageSquare, Phone, MoreVertical, Filter, Inbox,
   ChevronDown, Circle, Smile, Paperclip, ArrowLeft, X, LayoutTemplate, Upload,
+  StickyNote, Zap, UserCheck, Trash2, PanelRightOpen, PanelRightClose,
 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 function authFetch(url: string, options: RequestInit = {}) {
   const headers = new Headers(options.headers);
@@ -20,6 +22,27 @@ function authFetch(url: string, options: RequestInit = {}) {
 }
 
 type ConvStatus = "open" | "resolved" | "pending";
+type ConvFilter = ConvStatus | "all" | "mine";
+type RightTab = "notes" | "quickreplies" | "assign";
+
+interface Note {
+  id: string;
+  text: string;
+  userName: string;
+  createdAt: string;
+}
+
+interface QuickReply {
+  id: string;
+  title: string;
+  message: string;
+}
+
+interface Member {
+  userId: string;
+  role: string;
+  user: { id: string; name: string; email: string };
+}
 
 interface Conversation {
   id: string;
@@ -30,6 +53,7 @@ interface Conversation {
   lastMessageAt: string;
   unreadCount: number;
   status: ConvStatus;
+  assignedTo: string | null;
 }
 
 interface TemplateButton {
@@ -96,14 +120,17 @@ function StatusIcon({ status }: { status: string }) {
   return <Clock size={13} className="text-gray-300" />;
 }
 
-const STATUS_TABS: { label: string; value: ConvStatus | "all" }[] = [
+const STATUS_TABS: { label: string; value: ConvFilter }[] = [
   { label: "All", value: "all" },
+  { label: "Mine", value: "mine" },
   { label: "Open", value: "open" },
   { label: "Pending", value: "pending" },
   { label: "Resolved", value: "resolved" },
 ];
 
 export default function InboxPage() {
+  const { user, workspace } = useAuth();
+  const role = workspace?.role ?? "agent";
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -118,7 +145,12 @@ export default function InboxPage() {
   const msgContainerRef = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState("");
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<ConvStatus | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<ConvFilter>("all");
+
+  // Default agents to "Mine" tab on first load
+  useEffect(() => {
+    if (role === "agent") setStatusFilter("mine");
+  }, [role]);
   const [filterOpen, setFilterOpen] = useState(false);
   const [sendError, setSendError] = useState("");
   const [mobileView, setMobileView] = useState<"list" | "chat">("list");
@@ -134,10 +166,52 @@ export default function InboxPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Right panel
+  const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [rightTab, setRightTab] = useState<RightTab>("notes");
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [noteText, setNoteText] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
+  const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
+  const [qrSearch, setQrSearch] = useState("");
+  const [members, setMembers] = useState<Member[]>([]);
+  const [assigning, setAssigning] = useState(false);
+  const [assignedUserId, setAssignedUserId] = useState<string | null>(null);
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+
+  // Fetch workspace id once
+  useEffect(() => {
+    authFetch("/api/workspace").then(async (r) => {
+      if (r.ok) {
+        const data = await r.json();
+        if (data[0]?.id) setWorkspaceId(data[0].id);
+      }
+    });
+  }, []);
+
+  const fetchNotes = useCallback(async (id: string) => {
+    const r = await authFetch(`/api/inbox/conversations/${id}/notes`);
+    if (r.ok) setNotes(await r.json());
+  }, []);
+
+  const fetchQuickReplies = useCallback(async () => {
+    const r = await authFetch("/api/quick-replies");
+    if (r.ok) setQuickReplies(await r.json());
+  }, []);
+
+  const fetchMembers = useCallback(async (wsId: string) => {
+    const r = await authFetch(`/api/workspace/members?workspaceId=${wsId}`);
+    if (r.ok) setMembers(await r.json());
+  }, []);
+
   // Fetch conversation list
   const fetchConversations = useCallback(async () => {
     const params = new URLSearchParams();
-    if (statusFilter !== "all") params.set("status", statusFilter);
+    if (statusFilter === "mine") {
+      params.set("mine", "true");
+    } else if (statusFilter !== "all") {
+      params.set("status", statusFilter);
+    }
     if (search) params.set("search", search);
     const res = await authFetch(`/api/inbox/conversations?${params}`);
     if (res.ok) {
@@ -199,8 +273,18 @@ export default function InboxPage() {
     setHasMore(false);
     setSendError("");
     setMobileView("chat");
+    setNotes([]);
+    setAssignedUserId(conv.assignedTo ?? null);
     fetchMessages(conv.id);
+    fetchNotes(conv.id);
+    fetchQuickReplies();
+    if (workspaceId) fetchMembers(workspaceId);
   };
+
+  // Fetch members when workspaceId becomes available and a conv is open
+  useEffect(() => {
+    if (workspaceId && activeId) fetchMembers(workspaceId);
+  }, [workspaceId, activeId, fetchMembers]);
 
   // Poll for new messages every 5s when a conversation is open
   useEffect(() => {
@@ -262,6 +346,38 @@ export default function InboxPage() {
       );
     }
     setSending(false);
+  };
+
+  const addNote = async () => {
+    if (!noteText.trim() || !activeId || savingNote) return;
+    setSavingNote(true);
+    const r = await authFetch(`/api/inbox/conversations/${activeId}/notes`, {
+      method: "POST",
+      body: JSON.stringify({ text: noteText.trim() }),
+    });
+    if (r.ok) {
+      const note = await r.json();
+      setNotes((prev) => [...prev, note]);
+      setNoteText("");
+    }
+    setSavingNote(false);
+  };
+
+  const deleteNote = async (noteId: string) => {
+    if (!activeId) return;
+    await authFetch(`/api/inbox/conversations/${activeId}/notes?noteId=${noteId}`, { method: "DELETE" });
+    setNotes((prev) => prev.filter((n) => n.id !== noteId));
+  };
+
+  const assignConversation = async (userId: string | null) => {
+    if (!activeId || assigning) return;
+    setAssigning(true);
+    await authFetch(`/api/inbox/conversations/${activeId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ assignedUserId: userId }),
+    });
+    setAssignedUserId(userId);
+    setAssigning(false);
   };
 
   const handleStatusChange = async (status: ConvStatus) => {
@@ -556,9 +672,10 @@ export default function InboxPage() {
 
       {/* Right Panel — Chat View */}
       {activeId && activeConv ? (
-        <div className={`flex flex-1 min-h-0 flex-col overflow-hidden ${
+        <div className={`flex flex-1 min-h-0 overflow-hidden ${
           mobileView === "list" ? "hidden md:flex" : "flex"
         }`}>
+        <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
           {/* Chat Header */}
           <div className="flex items-center justify-between border-b border-gray-200 bg-white px-2 sm:px-4 py-2 sm:py-3 gap-2">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
@@ -603,8 +720,12 @@ export default function InboxPage() {
                   ))}
                 </div>
               </div>
-              <button className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100">
-                <MoreVertical size={16} className="sm:w-4 sm:h-4" />
+              <button
+                onClick={() => setRightPanelOpen((v) => !v)}
+                className={`rounded-lg p-1.5 hover:bg-gray-100 ${ rightPanelOpen ? "text-green-600 bg-green-50" : "text-gray-400" }`}
+                title="Notes / Quick Replies / Assign"
+              >
+                {rightPanelOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
               </button>
             </div>
           </div>
@@ -873,6 +994,145 @@ export default function InboxPage() {
               </button>
             </div>
           </div>
+        </div>
+
+        {/* Right Sidebar */}
+        {rightPanelOpen && (
+          <div className="hidden md:flex w-72 flex-shrink-0 flex-col border-l border-gray-200 bg-white overflow-hidden">
+            {/* Tabs */}
+            <div className="flex border-b border-gray-100">
+              {(["notes", "quickreplies", "assign"] as RightTab[]).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setRightTab(tab)}
+                  className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${
+                    rightTab === tab ? "border-b-2 border-green-600 text-green-700" : "text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  {tab === "notes" ? "Notes" : tab === "quickreplies" ? "Quick Replies" : "Assign"}
+                </button>
+              ))}
+            </div>
+
+            {/* Notes Tab */}
+            {rightTab === "notes" && (
+              <div className="flex flex-1 flex-col overflow-hidden">
+                <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                  {notes.length === 0 && (
+                    <p className="text-center text-xs text-gray-400 mt-8">No notes yet</p>
+                  )}
+                  {notes.map((n) => (
+                    <div key={n.id} className="rounded-lg bg-yellow-50 border border-yellow-100 px-3 py-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[11px] font-semibold text-yellow-700">{n.userName}</span>
+                        <button onClick={() => deleteNote(n.id)} className="text-gray-300 hover:text-red-400">
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                      <p className="text-xs text-gray-700 whitespace-pre-wrap">{n.text}</p>
+                      <p className="mt-1 text-[10px] text-gray-400">{new Date(n.createdAt).toLocaleString()}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="border-t border-gray-100 p-3">
+                  <textarea
+                    value={noteText}
+                    onChange={(e) => setNoteText(e.target.value)}
+                    placeholder="Add a note..."
+                    rows={3}
+                    className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-xs outline-none focus:border-yellow-400 resize-none"
+                  />
+                  <button
+                    onClick={addNote}
+                    disabled={savingNote || !noteText.trim()}
+                    className="mt-2 w-full rounded-lg bg-yellow-500 py-1.5 text-xs font-semibold text-white hover:bg-yellow-600 disabled:opacity-50"
+                  >
+                    {savingNote ? "Saving..." : "Add Note"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Quick Replies Tab */}
+            {rightTab === "quickreplies" && (
+              <div className="flex flex-1 flex-col overflow-hidden">
+                <div className="p-3 border-b border-gray-100">
+                  <div className="flex items-center gap-2 rounded-lg bg-gray-100 px-2.5 py-1.5">
+                    <Search size={12} className="text-gray-400" />
+                    <input
+                      value={qrSearch}
+                      onChange={(e) => setQrSearch(e.target.value)}
+                      placeholder="Search..."
+                      className="flex-1 bg-transparent text-xs outline-none placeholder:text-gray-400"
+                    />
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                  {quickReplies
+                    .filter((r) => !qrSearch || r.title.toLowerCase().includes(qrSearch.toLowerCase()) || r.message.toLowerCase().includes(qrSearch.toLowerCase()))
+                    .map((r) => (
+                      <button
+                        key={r.id}
+                        onClick={() => { setReplyText(r.message); setRightPanelOpen(false); }}
+                        className="w-full text-left rounded-lg border border-gray-100 px-3 py-2 hover:bg-green-50 hover:border-green-200 transition-colors"
+                      >
+                        <span className="block text-[11px] font-semibold text-green-700 mb-0.5">/{r.title}</span>
+                        <span className="block text-xs text-gray-600 line-clamp-2">{r.message}</span>
+                      </button>
+                    ))}
+                  {quickReplies.length === 0 && (
+                    <p className="text-center text-xs text-gray-400 mt-8">No quick replies saved</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Assign Tab */}
+            {rightTab === "assign" && (
+              <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                <p className="text-xs text-gray-500 mb-3">Assign this conversation to a team member</p>
+                {/* Assign to self — quick button for agents */}
+                {user && (
+                  <button
+                    onClick={() => assignConversation(user.id)}
+                    disabled={assigning || assignedUserId === user.id}
+                    className={`w-full flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors mb-2 ${
+                      assignedUserId === user.id ? "border-green-300 bg-green-50 text-green-700" : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                    }`}
+                  >
+                    <UserCheck size={13} /> {assignedUserId === user.id ? "Assigned to you" : "Assign to me"}
+                  </button>
+                )}
+                <button
+                  onClick={() => assignConversation(null)}
+                  className={`w-full flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
+                    assignedUserId === null ? "border-green-300 bg-green-50 text-green-700" : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  <UserCheck size={13} /> Unassigned
+                </button>
+                {members.map((m) => (
+                  <button
+                    key={m.userId}
+                    onClick={() => assignConversation(m.userId)}
+                    disabled={assigning}
+                    className={`w-full flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
+                      assignedUserId === m.userId ? "border-green-300 bg-green-50 text-green-700" : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-purple-100 text-[10px] font-bold text-purple-700">
+                      {(m.user.name ?? m.user.email).slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="min-w-0 text-left">
+                      <p className="truncate">{m.user.name ?? m.user.email}</p>
+                      <p className="text-[10px] text-gray-400 capitalize">{m.role}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         </div>
       ) : (
         /* Empty State */

@@ -1,13 +1,11 @@
 'use client';
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { CheckCircle2, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Navbar from "@/components/layout/Navbar";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
@@ -51,7 +49,7 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || "Something went wrong"); return; }
-      router.push("/dashboard/inbox");
+      window.location.href = "/dashboard/inbox";
     } catch {
       setError("Network error. Please try again.");
     } finally {

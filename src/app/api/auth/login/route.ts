@@ -17,15 +17,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
 
   const membership = await prisma.workspaceMember.findFirst({
-    where: { userId: user.id, role: "owner" },
+    where: { userId: user.id },
+    orderBy: { createdAt: "asc" },
     include: { workspace: true },
   });
 
-  const token = signToken({ id: user.id, email: user.email });
+  const role = membership?.role ?? "agent";
+  const token = signToken({ id: user.id, email: user.email, role });
 
   const res = NextResponse.json({
     user: { id: user.id, name: user.name, email: user.email },
-    workspace: membership ? { id: membership.workspace.id, name: membership.workspace.name, slug: membership.workspace.slug, plan: membership.workspace.plan } : null,
+    workspace: membership ? { id: membership.workspace.id, name: membership.workspace.name, slug: membership.workspace.slug, plan: membership.workspace.plan, role } : null,
   });
 
   res.cookies.set("token", token, {
