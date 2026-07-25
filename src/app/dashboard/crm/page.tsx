@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Users, TrendingUp, Target, Award, RefreshCw, Search, ChevronRight } from "lucide-react";
+import { Users, TrendingUp, Target, Award, RefreshCw, Search, ChevronRight, Sparkles, Loader2, CalendarPlus } from "lucide-react";
 import Link from "next/link";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -71,12 +71,16 @@ function getIntent(contact: CRMContact): string {
 function LeadCard({
   contact,
   onStageChange,
+  onQualify,
+  qualifying,
   dragging,
   onDragStart,
   onDragEnd,
 }: {
   contact: CRMContact;
   onStageChange: (id: string, stage: string) => void;
+  onQualify: (id: string) => void;
+  qualifying: boolean;
   dragging: boolean;
   onDragStart: () => void;
   onDragEnd: () => void;
@@ -86,6 +90,9 @@ function LeadCard({
   const intent = getIntent(contact);
   const lastConv = contact.conversations[0];
   const stageInfo = STAGES.find((s) => s.key === stage);
+  const cf = contact.customFields;
+  const alreadyQualified = !!(cf && typeof cf === "object" && "qualifiedAt" in cf);
+  const summary = cf && typeof cf === "object" && "leadSummary" in cf ? String(cf.leadSummary) : "";
 
   return (
     <div
@@ -99,16 +106,16 @@ function LeadCard({
       {/* Header */}
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex items-center gap-2 min-w-0">
-          <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white ${avatarColor(contact.phone)}`}>
+          <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${avatarColor(contact.phone)}` }>
             {initials(contact.name)}
           </div>
           <div className="min-w-0">
-            <p className="text-xs font-semibold text-gray-800 truncate">{contact.name}</p>
-            <p className="text-[10px] text-gray-400 truncate">{contact.phone}</p>
+            <p className="text-sm font-bold text-gray-800 break-words">{contact.name}</p>
+            <p className="text-xs font-semibold text-gray-500">{contact.phone}</p>
           </div>
         </div>
         {score > 0 && (
-          <span className={`flex-shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+          <span className={`flex-shrink-0 rounded-full px-1.5 py-0.5 text-xs font-bold ${
             score >= 8 ? "bg-green-100 text-green-700" :
             score >= 5 ? "bg-yellow-100 text-yellow-700" :
             "bg-gray-100 text-gray-500"
@@ -120,26 +127,26 @@ function LeadCard({
 
       {/* Intent */}
       {intent && (
-        <p className="mb-2 text-[10px] text-purple-600 font-medium capitalize bg-purple-50 rounded-md px-2 py-0.5 inline-block">
+        <p className="mb-2 text-xs font-semibold text-purple-600 capitalize bg-purple-50 rounded-md px-2 py-0.5 inline-block">
           {intent}
         </p>
       )}
 
       {/* Last message */}
       {lastConv && (
-        <p className="text-[10px] text-gray-400 truncate mb-2">
+        <p className="text-xs font-medium text-gray-500 break-words mb-2">
           {lastConv.lastMessage || "No messages yet"}
         </p>
       )}
 
       {/* Footer */}
       <div className="flex items-center justify-between">
-        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${stageInfo?.color}`}>
+        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${stageInfo?.color}`}>
           {stageInfo?.label}
         </span>
         <div className="flex items-center gap-1.5">
           {lastConv && (
-            <span className="text-[10px] text-gray-300">{timeAgo(lastConv.lastMessageAt)}</span>
+            <span className="text-xs font-medium text-gray-400">{timeAgo(lastConv.lastMessageAt)}</span>
           )}
           <Link
             href={`/dashboard/contacts`}
@@ -151,18 +158,40 @@ function LeadCard({
         </div>
       </div>
 
+      {/* AI summary */}
+      {summary && (
+        <p className="mb-2 text-[11px] text-gray-400 italic line-clamp-2">{summary}</p>
+      )}
+
       {/* Quick stage change */}
-      <div className="mt-2 pt-2 border-t border-gray-50">
+      <div className="mt-2 pt-2 border-t border-gray-50 flex flex-col gap-1.5">
         <select
           value={stage}
           onChange={(e) => onStageChange(contact.id, e.target.value)}
           onClick={(e) => e.stopPropagation()}
-          className="w-full rounded-lg border border-gray-100 bg-gray-50 px-2 py-1 text-[10px] text-gray-600 outline-none focus:border-green-300"
+          className="w-full rounded-lg border border-gray-100 bg-gray-50 px-2 py-1 text-xs font-medium text-gray-600 outline-none focus:border-green-300"
         >
           {STAGES.map((s) => (
             <option key={s.key} value={s.key}>{s.label}</option>
           ))}
         </select>
+        {!alreadyQualified && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onQualify(contact.id); }}
+            disabled={qualifying}
+            className="flex items-center justify-center gap-1 rounded-lg bg-purple-50 px-2 py-1 text-[11px] font-semibold text-purple-600 hover:bg-purple-100 transition disabled:opacity-60"
+          >
+            {qualifying ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />}
+            {qualifying ? "Qualifying..." : "Qualify with AI"}
+          </button>
+        )}
+        <Link
+          href={`/dashboard/bookings`}
+          onClick={(e) => e.stopPropagation()}
+          className="flex items-center justify-center gap-1 rounded-lg bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-600 hover:bg-blue-100 transition"
+        >
+          <CalendarPlus size={10} /> Book Meeting
+        </Link>
       </div>
     </div>
   );
@@ -173,6 +202,8 @@ function StageColumn({
   stage,
   contacts,
   onStageChange,
+  onQualify,
+  qualifyingId,
   draggingId,
   onDragStart,
   onDragEnd,
@@ -181,6 +212,8 @@ function StageColumn({
   stage: typeof STAGES[number];
   contacts: CRMContact[];
   onStageChange: (id: string, stage: string) => void;
+  onQualify: (id: string) => void;
+  qualifyingId: string | null;
   draggingId: string | null;
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
@@ -201,9 +234,9 @@ function StageColumn({
       <div className="flex items-center justify-between px-3 py-2.5">
         <div className="flex items-center gap-2">
           <span className={`h-2 w-2 rounded-full ${stage.dot}`} />
-          <span className="text-xs font-semibold text-gray-700">{stage.label}</span>
+          <span className="text-sm font-bold text-gray-700">{stage.label}</span>
         </div>
-        <span className="rounded-full bg-white border border-gray-200 px-2 py-0.5 text-[10px] font-bold text-gray-500">
+        <span className="rounded-full bg-white border border-gray-200 px-2 py-0.5 text-xs font-bold text-gray-500">
           {contacts.length}
         </span>
       </div>
@@ -211,7 +244,7 @@ function StageColumn({
       {/* Cards */}
       <div className="flex flex-col gap-2 px-2 pb-3 flex-1 min-h-[120px]">
         {contacts.length === 0 ? (
-          <div className={`flex items-center justify-center rounded-xl border-2 border-dashed py-8 text-[10px] text-gray-300 ${
+          <div className={`flex items-center justify-center rounded-xl border-2 border-dashed py-8 text-xs font-medium text-gray-300 ${
             dragOver ? "border-green-300" : "border-gray-200"
           }`}>
             Drop here
@@ -222,6 +255,8 @@ function StageColumn({
               key={c.id}
               contact={c}
               onStageChange={onStageChange}
+              onQualify={onQualify}
+              qualifying={qualifyingId === c.id}
               dragging={draggingId === c.id}
               onDragStart={() => onDragStart(c.id)}
               onDragEnd={onDragEnd}
@@ -239,6 +274,7 @@ export default function CRMPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [qualifyingId, setQualifyingId] = useState<string | null>(null);
 
   const fetchContacts = useCallback(async () => {
     setLoading(true);
@@ -272,6 +308,18 @@ export default function CRMPage() {
   const handleDrop = (stage: string) => {
     if (draggingId) updateStage(draggingId, stage);
     setDraggingId(null);
+  };
+
+  const handleQualify = async (contactId: string) => {
+    setQualifyingId(contactId);
+    const res = await fetch("/api/leads/qualify", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contactId }),
+    });
+    setQualifyingId(null);
+    if (res.ok) fetchContacts();
   };
 
   const filtered = contacts.filter(
@@ -354,6 +402,8 @@ export default function CRMPage() {
                   stage={stage}
                   contacts={stageContacts}
                   onStageChange={updateStage}
+                  onQualify={handleQualify}
+                  qualifyingId={qualifyingId}
                   draggingId={draggingId}
                   onDragStart={setDraggingId}
                   onDragEnd={() => setDraggingId(null)}

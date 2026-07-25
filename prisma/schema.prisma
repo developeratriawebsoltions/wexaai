@@ -43,6 +43,7 @@ model Workspace {
   settings             WorkspaceSettings?
   quickReplies         QuickReply[]
   invites              WorkspaceInvite[]
+  bookings             Booking[]
 }
 
 model WorkspaceMember {
@@ -83,6 +84,7 @@ model Contact {
   workspace     Workspace      @relation(fields: [workspaceId], references: [id])
   conversations Conversation[]
   messages      Message[]
+  bookings      Booking[]
 
   @@unique([workspaceId, phone])
 }
@@ -389,6 +391,24 @@ model WorkspaceInvite {
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([token])
+}
+
+model Booking {
+  id          String    @id @default(cuid())
+  workspaceId String
+  contactId   String
+  title       String    @default("Meeting")
+  date        DateTime
+  duration    Int       @default(30) // minutes
+  status      String    @default("scheduled") // scheduled | completed | cancelled | no_show
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  contact     Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([contactId])
 }
 
 model ActivityLog {

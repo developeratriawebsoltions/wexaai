@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { runAiEngine } from "@/lib/ai-engine";
 import { normalizePhone } from "@/lib/apiHelpers";
 import { runFlow } from "@/lib/flow-runner";
+import { handleLeadQualification } from "@/lib/lead-qualifier";
+import { handleBookingScheduler } from "@/lib/booking-scheduler";
 
 const VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN ?? "wexa_verify_2026";
 
@@ -219,7 +221,66 @@ async function processWebhook(body: unknown) {
 
     console.log("[Webhook] flowMatched:", flowMatched);
 
-    if (!flowMatched) {
+    if (!flowMatched && isText) {
+      // 1. Booking scheduler (highest priority for text messages)
+      const { handled: bookHandled, reply: bookReply } = await handleBookingScheduler(
+        workspaceId, contactPhone, conversation.id, text
+      ).catch((err) => {
+        console.error("[Webhook] booking scheduler error:", err);
+        return { handled: false, reply: undefined } as { handled: boolean; reply?: string };
+      });
+
+      if (bookHandled && bookReply) {
+        const waAccount = await prisma.whatsAppAccount.findUnique({ where: { workspaceId } });
+        if (waAccount) {
+          const metaRes = await fetch(
+            `https://graph.facebook.com/v21.0/${waAccount.phoneNumberId}/messages`,
+            {
+              method: "POST",
+              headers: { Authorization: `Bearer ${waAccount.accessToken}`, "Content-Type": "application/json" },
+              body: JSON.stringify({ messaging_product: "whatsapp", to: contactPhone.replace(/^\+/, ""), type: "text", text: { body: bookReply } }),
+            }
+          );
+          const metaData = await metaRes.json();
+          await prisma.message.create({
+            data: { workspaceId, conversationId: conversation.id, contactId: contact.id, from: "AI", text: bookReply, waMessageId: metaData?.messages?.[0]?.id, direction: "outbound", status: metaRes.ok ? "sent" : "failed", messageType: "text" },
+          });
+          await prisma.conversation.update({ where: { id: conversation.id }, data: { lastMessage: bookReply, lastMessageAt: new Date() } });
+        }
+      // 2. Lead qualification
+      } else {
+        const { handled: qualHandled, reply: qualReply } = await handleLeadQualification(
+          workspaceId, contactPhone, conversation.id, text
+        ).catch((err) => {
+          console.error("[Webhook] lead qualification error:", err);
+          return { handled: false, reply: undefined } as { handled: boolean; reply?: string };
+        });
+
+        if (qualHandled && qualReply) {
+          const waAccount = await prisma.whatsAppAccount.findUnique({ where: { workspaceId } });
+          if (waAccount) {
+            const metaRes = await fetch(
+              `https://graph.facebook.com/v21.0/${waAccount.phoneNumberId}/messages`,
+              {
+                method: "POST",
+                headers: { Authorization: `Bearer ${waAccount.accessToken}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ messaging_product: "whatsapp", to: contactPhone.replace(/^\+/, ""), type: "text", text: { body: qualReply } }),
+              }
+            );
+            const metaData = await metaRes.json();
+            await prisma.message.create({
+              data: { workspaceId, conversationId: conversation.id, contactId: contact.id, from: "AI", text: qualReply, waMessageId: metaData?.messages?.[0]?.id, direction: "outbound", status: metaRes.ok ? "sent" : "failed", messageType: "text" },
+            });
+            await prisma.conversation.update({ where: { id: conversation.id }, data: { lastMessage: qualReply, lastMessageAt: new Date() } });
+          }
+        // 3. AI engine fallback
+        } else {
+          await runAiEngine(workspaceId, conversation.id, contactPhone, text).catch((err) => {
+            console.error("[Webhook] AI engine failed:", err);
+          });
+        }
+      }
+    } else if (!flowMatched) {
       await runAiEngine(workspaceId, conversation.id, contactPhone, text).catch((err) => {
         console.error("[Webhook] AI engine failed:", err);
       });
