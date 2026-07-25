@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { handleAiReply } from "@/lib/ai-reply";
+import { runAiEngine } from "@/lib/ai-engine";
 import { normalizePhone } from "@/lib/apiHelpers";
 import { runFlow } from "@/lib/flow-runner";
 
@@ -220,8 +220,8 @@ async function processWebhook(body: unknown) {
     console.log("[Webhook] flowMatched:", flowMatched);
 
     if (!flowMatched) {
-      await handleAiReply(workspaceId, conversation.id, contactPhone, text).catch((err) => {
-        console.error("[Webhook] AI reply failed:", err);
+      await runAiEngine(workspaceId, conversation.id, contactPhone, text).catch((err) => {
+        console.error("[Webhook] AI engine failed:", err);
       });
     }
   }

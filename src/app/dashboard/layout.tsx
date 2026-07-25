@@ -6,7 +6,7 @@ import { useState, useEffect } from "react";
 import {
   Inbox, Home, Users, Radio, FileText, Bot,
   GitBranch, UsersRound, BarChart2, Plug, Settings,
-  CreditCard, HelpCircle, LogOut, User, ChevronDown, Menu, X,
+  CreditCard, HelpCircle, LogOut, User, ChevronDown, Menu, X, Kanban,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -15,6 +15,7 @@ const navItems = [
   { href: "/dashboard/inbox",        label: "Inbox",        icon: Inbox,      roles: ["owner","manager","agent"] },
   { href: "/dashboard/overview",     label: "Dashboard",   icon: Home,       roles: ["owner","manager"] },
   { href: "/dashboard/contacts",     label: "Contacts",    icon: Users,      roles: ["owner","manager","agent"] },
+  { href: "/dashboard/crm",          label: "CRM",         icon: Kanban,     roles: ["owner","manager"] },
   { href: "/dashboard/broadcasts",   label: "Broadcasts",  icon: Radio,      roles: ["owner","manager"] },
   { href: "/dashboard/templates",    label: "Templates",   icon: FileText,   roles: ["owner","manager"] },
   { href: "/dashboard/ai-agent",     label: "AI Agent",    icon: Bot,        roles: ["owner","manager"] },
