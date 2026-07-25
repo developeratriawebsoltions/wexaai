@@ -223,7 +223,7 @@ export default function TemplatesPage() {
   }, [contactSearch, sendTemplate, fetchContacts]);
 
   async function handleHeaderUpload(file: File | null, target: "send" | "create" = "send") {
-    if (!file || !token) return;
+    if (!file) return;
     setUploadingHeader(true);
     if (target === "send") setSendError("");
     else setError("");
