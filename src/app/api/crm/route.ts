@@ -49,7 +49,8 @@ export async function PATCH(req: NextRequest) {
     ? contact.customFields as Record<string, unknown>
     : {};
 
-  const newTags = contact.tags.includes("lead") ? contact.tags : [...contact.tags, "lead"];
+  const parsedTags: string[] = JSON.parse(contact.tags || "[]");
+  const newTags = JSON.stringify(parsedTags.includes("lead") ? parsedTags : [...parsedTags, "lead"]);
 
   const updated = await prisma.contact.update({
     where: { id: contactId },

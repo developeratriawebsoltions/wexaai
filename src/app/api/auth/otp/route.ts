@@ -14,28 +14,41 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid OTP purpose" }, { status: 400 });
   }
 
-  if (purpose === "signup") {
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) {
-      return NextResponse.json({ error: "Email already in use" }, { status: 409 });
-    }
-  }
-
-  const { code, expiresAt } = await createOtp(email, purpose);
-
   try {
-    await sendOtpEmail({ to: email, code, purpose });
+    if (purpose === "signup") {
+      const existing = await prisma.user.findUnique({ where: { email } });
+      if (existing) {
+        return NextResponse.json({ error: "Email already in use" }, { status: 409 });
+      }
+    }
+
+    const { code, expiresAt } = await createOtp(email, purpose);
+
+    try {
+      await sendOtpEmail({ to: email, code, purpose });
+    } catch (error) {
+      console.error("OTP email send failed", error);
+      return NextResponse.json(
+        { error: "Unable to send OTP email. Please verify SMTP settings." },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: "OTP sent successfully",
+      expiresAt,
+    });
   } catch (error) {
-    console.error("OTP email send failed", error);
+    console.error("OTP request failed", error);
     return NextResponse.json(
-      { error: "Unable to send OTP email. Please verify SMTP settings." },
+      {
+        error: "Unable to process OTP request right now. Please verify the database connection.",
+      },
       { status: 500 }
     );
   }
 
-  return NextResponse.json({
-    success: true,
-    message: "OTP sent successfully",
-    expiresAt,
-  });
+
+
 }

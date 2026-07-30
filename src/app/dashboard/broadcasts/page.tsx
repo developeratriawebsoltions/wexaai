@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Search, Bell, Eye, X, Send, Loader2, ChevronRight, ChevronLeft, Radio, Upload } from "lucide-react";
+import { Search, Bell, Eye, X, Send, Loader2, ChevronRight, ChevronLeft, Radio } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
 type Broadcast = {
@@ -13,6 +13,9 @@ type Broadcast = {
   totalCount: number;
   sentCount: number;
   failedCount: number;
+  scheduledAt?: string | null;
+  readCount?: number;
+  repliedCount?: number;
   createdAt: string;
 };
 
@@ -43,10 +46,19 @@ const STATUS_STYLE: Record<string, string> = {
   completed: "bg-green-100 text-green-700",
   sending:   "bg-blue-100 text-blue-700",
   pending:   "bg-yellow-100 text-yellow-700",
+  scheduled: "bg-purple-100 text-purple-700",
+  cancelled: "bg-gray-100 text-gray-500",
   failed:    "bg-red-100 text-red-600",
 };
 
 const FILTERS = ["All", "completed", "sending", "pending", "failed"];
+const PERIODS = ["Last 7 days", "Last 30 days", "This Month", "Last Month"];
+const SORT_OPTIONS = ["Latest", "Oldest", "Most Successful", "Most Failed"];
+const SIDEBAR_ITEMS = [
+  { label: "Broadcast History", active: true },
+  { label: "Scheduled Broadcasts", active: false },
+  { label: "Template Messages", active: false },
+];
 
 const STEPS = ["Campaign", "Template", "Contacts", "Send"];
 
@@ -72,11 +84,21 @@ export default function BroadcastsPage() {
   const [contactSearch, setContactSearch] = useState("");
   const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
   const [contactsLoading, setContactsLoading] = useState(false);
+  const [scheduledAt, setScheduledAt] = useState("");
   const [sending, setSending] = useState(false);
   const [wizardError, setWizardError] = useState("");
-  const [uploadingHeader, setUploadingHeader] = useState(false);
   const [canSendHeader, setCanSendHeader] = useState(true);
-  const headerFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const [fromDate, setFromDate] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 6);
+    return date.toISOString().slice(0, 10);
+  });
+  const [toDate, setToDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [period, setPeriod] = useState(PERIODS[0]);
+  const [sortBy, setSortBy] = useState(SORT_OPTIONS[0]);
+  const [updatedAt, setUpdatedAt] = useState("Just now");
+  const [messagingLimit, setMessagingLimit] = useState("-");
 
   // Detail modal
   const [detail, setDetail] = useState<(Broadcast & { logs: BroadcastLog[] }) | null>(null);
@@ -140,7 +162,9 @@ export default function BroadcastsPage() {
       return;
     }
     setHeaderUrl("");
-    setCanSendHeader(false);
+    // Agar template ka header already Cloudinary URL hai toh upload ki zaroorat nahi
+    const hasCloudinaryHeader = !!selectedTemplate.header?.includes("cloudinary.com");
+    setCanSendHeader(hasCloudinaryHeader);
   }, [selectedTemplate]);
 
   useEffect(() => {
@@ -159,6 +183,7 @@ export default function BroadcastsPage() {
     setContactSearch("");
     setSelectedContactIds([]);
     setContacts([]);
+    setScheduledAt("");
     setWizardError("");
     setShowWizard(true);
     fetchTemplates();
@@ -173,32 +198,6 @@ export default function BroadcastsPage() {
       return;
     }
     setStep((s) => s + 1);
-  };
-
-  const handleHeaderUpload = async (file: File | null) => {
-    if (!file || !token) return;
-    setUploadingHeader(true);
-    setWizardError("");
-
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        credentials: "include",
-        body: formData,
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Upload failed");
-      setHeaderUrl(data.url ?? "");
-      setCanSendHeader(true);
-    } catch (err: any) {
-      setWizardError(err?.message ?? "Upload failed");
-    } finally {
-      setUploadingHeader(false);
-    }
   };
 
   const handleSend = async () => {
@@ -216,6 +215,7 @@ export default function BroadcastsPage() {
           contactIds: audience === "selected" ? selectedContactIds : undefined,
           headerUrl: selectedTemplate?.headerType === "IMAGE" ? headerUrl.trim() || undefined : undefined,
           bodyVariables: Object.keys(bodyVariables).length > 0 ? bodyVariables : undefined,
+          scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
         }),
       });
       const data = await res.json();
@@ -235,12 +235,90 @@ export default function BroadcastsPage() {
     } finally { setDetailLoading(false); }
   };
 
-  const filtered = broadcasts.filter((b) => {
+  const parsedFromDate = new Date(fromDate);
+  const parsedToDate = new Date(toDate);
+
+  const parsedToDateEnd = new Date(parsedToDate);
+  parsedToDateEnd.setHours(23, 59, 59, 999);
+
+  const dateFiltered = broadcasts.filter((b) => {
+    if (!fromDate || !toDate) return true;
+    const created = new Date(b.createdAt);
+    return created >= parsedFromDate && created <= parsedToDateEnd;
+  });
+
+  const filtered = dateFiltered.filter((b) => {
     const matchFilter = filter === "All" || b.status === filter;
     const matchSearch = b.campaignName.toLowerCase().includes(search.toLowerCase()) ||
       b.templateName.toLowerCase().includes(search.toLowerCase());
     return matchFilter && matchSearch;
   });
+
+  const sortedBroadcasts = [...filtered].sort((a, b) => {
+    if (sortBy === "Latest") return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    if (sortBy === "Oldest") return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    if (sortBy === "Most Successful") return b.sentCount - a.sentCount;
+    if (sortBy === "Most Failed") return b.failedCount - a.failedCount;
+    return 0;
+  });
+
+  const overviewStats = {
+    sent: broadcasts.reduce((sum, item) => sum + item.sentCount, 0),
+    delivered: broadcasts.reduce((sum, item) => sum + item.sentCount, 0),
+    read: broadcasts.reduce((sum, item) => sum + (item.readCount ?? 0), 0),
+    replied: broadcasts.reduce((sum, item) => sum + (item.repliedCount ?? 0), 0),
+    sending: broadcasts.filter((item) => item.status === "sending").length,
+    failed: broadcasts.reduce((sum, item) => sum + item.failedCount, 0),
+    processing: 0,
+    queued: broadcasts.filter((item) => item.status === "queued").length,
+  };
+
+  const scheduledBroadcasts = broadcasts.filter((item) => item.status === "scheduled");
+
+  const cancelScheduled = async (id: string) => {
+    await fetch(`/api/broadcasts/${id}`, { method: "DELETE", credentials: "include" });
+    fetchBroadcasts();
+  };
+
+  const triggerScheduled = async () => {
+    await fetch("/api/broadcasts/process-scheduled", {
+      headers: { Authorization: `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET ?? "wexa-cron-secret-2026"}` },
+    });
+    fetchBroadcasts();
+  };
+
+  const getProgress = (value: number, total: number) => {
+    if (!total) return 0;
+    return Math.round((value / total) * 100);
+  };
+
+  const handleExport = () => {
+    const headers = ["Campaign Name", "Template", "Audience", "Scheduled", "Successful", "Recipients", "Failed", "Status"];
+    const rows = sortedBroadcasts.map((item) => [
+      item.campaignName,
+      item.templateName,
+      item.audience,
+      new Date(item.createdAt).toLocaleString(),
+      item.sentCount.toString(),
+      item.totalCount.toString(),
+      item.failedCount.toString(),
+      item.status,
+    ]);
+
+    const csv = [headers, ...rows].map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `broadcasts-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleRefresh = () => {
+    setUpdatedAt("Just now");
+    fetchBroadcasts();
+  };
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-[#f0f2f5]">
@@ -263,84 +341,269 @@ export default function BroadcastsPage() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-5">
-        <div className="rounded-xl border border-gray-200 bg-white">
-          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-            <h2 className="text-sm font-semibold text-gray-800">All Broadcasts</h2>
-            <button
-              onClick={openWizard}
-              className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700"
-            >
-              <Radio size={13} /> New Broadcast
-            </button>
-          </div>
-
-          {/* Filter tabs */}
-          <div className="flex items-center gap-1 border-b border-gray-100 px-5 py-2">
-            {FILTERS.map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`rounded-full px-3 py-1 text-xs font-medium capitalize transition ${
-                  filter === f ? "bg-green-600 text-white" : "text-gray-500 hover:bg-gray-100"
-                }`}
-              >
-                {f}
-              </button>
-            ))}
-          </div>
-
-          {loading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 size={22} className="animate-spin text-green-600" />
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-3 py-16">
-              <Radio size={32} className="text-gray-200" />
-              <p className="text-sm text-gray-400">No broadcasts yet.</p>
-              <button onClick={openWizard} className="text-xs text-green-600 hover:underline">
-                Create your first broadcast
-              </button>
-            </div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 text-xs text-gray-400">
-                  <th className="px-5 py-3 text-left font-medium">Campaign Name</th>
-                  <th className="px-3 py-3 text-left font-medium">Template</th>
-                  <th className="px-3 py-3 text-left font-medium">Contacts</th>
-                  <th className="px-3 py-3 text-left font-medium">Sent</th>
-                  <th className="px-3 py-3 text-left font-medium">Failed</th>
-                  <th className="px-3 py-3 text-left font-medium">Status</th>
-                  <th className="px-3 py-3 text-left font-medium">Date</th>
-                  <th className="px-3 py-3 text-left font-medium"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((b) => (
-                  <tr key={b.id} className="border-b border-gray-50 hover:bg-gray-50">
-                    <td className="px-5 py-3 font-medium text-gray-800">{b.campaignName}</td>
-                    <td className="px-3 py-3 text-gray-500 text-xs">{b.templateName}</td>
-                    <td className="px-3 py-3 text-gray-700">{b.totalCount}</td>
-                    <td className="px-3 py-3 font-semibold text-green-600">{b.sentCount}</td>
-                    <td className="px-3 py-3 font-semibold text-red-500">{b.failedCount}</td>
-                    <td className="px-3 py-3">
-                      <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold capitalize ${STATUS_STYLE[b.status] ?? "bg-gray-100 text-gray-600"}`}>
-                        {b.status}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3 text-xs text-gray-400">
-                      {new Date(b.createdAt).toLocaleDateString()}
-                    </td>
-                    <td className="px-3 py-3">
-                      <button onClick={() => openDetail(b.id)} className="text-gray-300 hover:text-blue-500 transition">
-                        <Eye size={14} />
-                      </button>
-                    </td>
-                  </tr>
+        <div className="grid gap-5 xl:grid-cols-[260px_1fr]">
+          <aside className="space-y-5">
+            <div className="rounded-xl border border-gray-200 bg-white p-5">
+              <h2 className="text-sm font-semibold text-gray-800">Broadcasts</h2>
+              <div className="mt-4 space-y-1">
+                {SIDEBAR_ITEMS.map((item) => (
+                  <button
+                    key={item.label}
+                    className={`w-full rounded-lg px-3 py-2 text-left text-sm font-medium transition ${
+                      item.active ? "bg-green-50 text-green-700" : "text-gray-500 hover:bg-gray-100"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
                 ))}
-              </tbody>
-            </table>
-          )}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 bg-white p-5">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-800">Scheduled Broadcasts</h3>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400">{scheduledBroadcasts.length}</span>
+                  {scheduledBroadcasts.length > 0 && (
+                    <button
+                      onClick={triggerScheduled}
+                      className="rounded-md bg-purple-100 px-2 py-0.5 text-[11px] font-semibold text-purple-700 hover:bg-purple-200"
+                    >
+                      Process Now
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="mt-4 space-y-3">
+                {scheduledBroadcasts.length === 0 ? (
+                  <p className="text-sm text-gray-500">No scheduled broadcasts yet.</p>
+                ) : (
+                  scheduledBroadcasts.map((item) => (
+                    <div key={item.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                      <p className="text-sm font-semibold text-gray-800 line-clamp-2">{item.campaignName}</p>
+                      <div className="mt-2 space-y-1 text-xs text-gray-500">
+                        <div className="flex items-center justify-between">
+                          <span>{item.templateName}</span>
+                          <span className="capitalize text-yellow-600 font-medium">{item.status}</span>
+                        </div>
+                        {item.scheduledAt && (
+                          <div className="text-[11px] text-gray-400">
+                            {new Date(item.scheduledAt).toLocaleString()}
+                          </div>
+                        )}
+                        <button
+                          onClick={() => cancelScheduled(item.id)}
+                          className="mt-1 w-full rounded-lg border border-red-200 bg-red-50 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-100"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </aside>
+
+          <main className="space-y-5">
+            <div className="rounded-xl border border-gray-200 bg-white p-5">
+              <div className="grid gap-4 xl:grid-cols-[1fr_auto] xl:items-center">
+                <div className="grid gap-3 lg:grid-cols-[1.5fr_1fr]">
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                      <label className="text-[11px] font-semibold uppercase text-gray-500">Date picker from</label>
+                      <input
+                        type="date"
+                        value={fromDate}
+                        onChange={(e) => setFromDate(e.target.value)}
+                        className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-green-500"
+                      />
+                    </div>
+                    <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                      <label className="text-[11px] font-semibold uppercase text-gray-500">Date picker to</label>
+                      <input
+                        type="date"
+                        value={toDate}
+                        onChange={(e) => setToDate(e.target.value)}
+                        className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-green-500"
+                      />
+                    </div>
+                    <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                      <label className="text-[11px] font-semibold uppercase text-gray-500">Period</label>
+                      <select
+                        value={period}
+                        onChange={(e) => setPeriod(e.target.value)}
+                        className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-green-500"
+                      >
+                        {PERIODS.map((option) => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-end">
+                    <button
+                      onClick={handleRefresh}
+                      className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                    >
+                      Apply now
+                    </button>
+                    <button
+                      onClick={handleExport}
+                      className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
+                    >
+                      Export
+                    </button>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                  <p className="text-[11px] font-semibold uppercase text-gray-500">Messaging Limit</p>
+                  <p className="mt-2 text-2xl font-semibold text-gray-900">{messagingLimit}</p>
+                </div>
+              </div>
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {[
+                  { label: "Sent", value: overviewStats.sent },
+                  { label: "Delivered", value: overviewStats.delivered },
+                  { label: "Read", value: overviewStats.read },
+                  { label: "Replied", value: overviewStats.replied },
+                  { label: "Sending", value: overviewStats.sending },
+                  { label: "Failed", value: overviewStats.failed },
+                  { label: "Processing", value: overviewStats.processing },
+                  { label: "Queued", value: overviewStats.queued },
+                ].map((stat) => (
+                  <div key={stat.label} className="rounded-2xl border border-gray-100 bg-white p-4">
+                    <p className="text-[11px] font-semibold uppercase text-gray-500">{stat.label}</p>
+                    <p className="mt-3 text-xl font-semibold text-gray-900">{stat.value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 bg-white p-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-800">Broadcast list</h3>
+                    <p className="mt-1 text-xs text-gray-500">Review your campaign delivery performance.</p>
+                  </div>
+                  <button
+                    onClick={openWizard}
+                    className="inline-flex items-center justify-center rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-700"
+                  >
+                    <Radio size={14} className="mr-2" /> New Broadcast
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <span>Sorted by</span>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-green-500"
+                  >
+                    {SORT_OPTIONS.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={handleRefresh}
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
+                  >
+                    Refresh
+                  </button>
+                  <span className="whitespace-nowrap">Updated: {updatedAt}</span>
+                </div>
+              </div>
+
+              {loading ? (
+                <div className="flex items-center justify-center py-16">
+                  <Loader2 size={22} className="animate-spin text-green-600" />
+                </div>
+              ) : sortedBroadcasts.length === 0 ? (
+                <div className="flex flex-col items-center justify-center gap-3 py-16">
+                  <Radio size={32} className="text-gray-200" />
+                  <p className="text-sm text-gray-400">No broadcasts match your filters.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-100 text-xs text-gray-400">
+                        <th className="px-4 py-3 text-left font-medium">Broadcast</th>
+                        <th className="px-4 py-3 text-left font-medium">Scheduled</th>
+                        <th className="px-4 py-3 text-left font-medium">Successful</th>
+                        <th className="px-4 py-3 text-left font-medium">Read</th>
+                        <th className="px-4 py-3 text-left font-medium">Replied</th>
+                        <th className="px-4 py-3 text-left font-medium">Recipients</th>
+                        <th className="px-4 py-3 text-left font-medium">Failed</th>
+                        <th className="px-4 py-3 text-left font-medium">Status</th>
+                        <th className="px-4 py-3 text-left font-medium"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedBroadcasts.map((item) => {
+                        const successPercent = getProgress(item.sentCount, item.totalCount);
+                        const readPercent = getProgress(item.readCount ?? 0, item.totalCount);
+                        const repliedPercent = getProgress(item.repliedCount ?? 0, item.totalCount);
+                        return (
+                          <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50">
+                            <td className="px-4 py-4 font-medium text-gray-800">{item.campaignName}</td>
+                            <td className="px-4 py-4 text-gray-500 text-xs">{new Date(item.createdAt).toLocaleDateString()}</td>
+                            <td className="px-4 py-4">
+                              <div className="flex items-center gap-3">
+                                <div className="relative h-10 w-10 rounded-full border border-gray-200 bg-green-50">
+                                  <div className="absolute inset-0 flex items-center justify-center text-[11px] font-semibold text-green-700">
+                                    {successPercent}%
+                                  </div>
+                                </div>
+                                <span className="text-sm text-gray-700">{item.sentCount}</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-4">
+                              <div className="flex items-center gap-3">
+                                <div className="relative h-10 w-10 rounded-full border border-gray-200 bg-gray-100">
+                                  <div className="absolute inset-0 flex items-center justify-center text-[11px] font-semibold text-gray-600">
+                                    {readPercent}%
+                                  </div>
+                                </div>
+                                <span className="text-sm text-gray-700">{item.readCount ?? 0}</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-4">
+                              <div className="flex items-center gap-3">
+                                <div className="relative h-10 w-10 rounded-full border border-gray-200 bg-gray-100">
+                                  <div className="absolute inset-0 flex items-center justify-center text-[11px] font-semibold text-gray-600">
+                                    {repliedPercent}%
+                                  </div>
+                                </div>
+                                <span className="text-sm text-gray-700">{item.repliedCount ?? 0}</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-4 text-gray-700">{item.totalCount}</td>
+                            <td className="px-4 py-4 text-red-600 font-semibold">{item.failedCount}</td>
+                            <td className="px-4 py-4">
+                              <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold capitalize ${STATUS_STYLE[item.status] ?? "bg-gray-100 text-gray-600"}`}>
+                                {item.status}
+                              </span>
+                            </td>
+                            <td className="px-4 py-4">
+                              <button onClick={() => openDetail(item.id)} className="text-gray-300 hover:text-blue-500 transition">
+                                <Eye size={16} />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </main>
         </div>
       </div>
 
@@ -449,57 +712,16 @@ export default function BroadcastsPage() {
                     </div>
                   )}
 
-                  {selectedTemplate?.headerType === "IMAGE" && (
+                  {selectedTemplate?.headerType === "IMAGE" && selectedTemplate?.header?.trim() && (
                     <div className="mt-3">
-                      <label className="mb-1.5 block text-sm font-semibold text-gray-700">Header Image URL (optional)</label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          value={headerUrl}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            setHeaderUrl(value);
-                            setCanSendHeader(Boolean(value.trim()));
-                          }}
-                          placeholder="https://your-public-domain.com/image.jpg"
-                          className="flex-1 rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-green-500"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => headerFileInputRef.current?.click()}
-                          disabled={uploadingHeader}
-                          className="flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-2 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-60"
-                        >
-                          {uploadingHeader ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-                          Upload
-                        </button>
-                        <input
-                          ref={headerFileInputRef}
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0] ?? null;
-                            if (file) handleHeaderUpload(file);
-                            e.target.value = "";
-                          }}
+                      <p className="mb-2 text-xs font-semibold text-gray-500">Header Image Preview</p>
+                      <div className="overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
+                        <img
+                          src={selectedTemplate.header.trim()}
+                          alt="Header preview"
+                          className="h-48 w-full object-contain"
                         />
                       </div>
-                      <p className="mt-2 rounded-md border-2 border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
-                        {selectedTemplate?.header ? "Upload a new image to enable Next. Existing template header will still be used if you move ahead." : "Upload an image before sending."}
-                      </p>
-
-                      {(headerUrl.trim() || selectedTemplate?.header?.trim()) && (
-                        <div className="mt-4">
-                          <p className="mb-2 text-sm font-semibold text-gray-700">Image Preview</p>
-                          <div className="overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
-                            <img
-                              src={(headerUrl.trim() || selectedTemplate?.header?.trim()) as string}
-                              alt="Header preview"
-                              className="h-48 w-full object-contain"
-                            />
-                          </div>
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>
@@ -607,16 +829,23 @@ export default function BroadcastsPage() {
                     </div>
                     <div className="flex justify-between text-xs">
                       <span className="text-gray-400">Audience</span>
-                      <span className="font-semibold text-gray-800 capitalize">{audience === "all" ? "All Contacts" : audience}</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-gray-400">Schedule</span>
-                      <span className="font-semibold text-gray-800">Send Now</span>
+                      <span className="font-semibold text-gray-800 capitalize">{audience === "all" ? "All Contacts" : `${selectedContactIds.length} selected`}</span>
                     </div>
                   </div>
-                  <p className="text-[11px] text-gray-400">
-                    This will send the template to all contacts immediately via Meta WhatsApp API.
-                  </p>
+
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold text-gray-700">Schedule (optional)</label>
+                    <input
+                      type="datetime-local"
+                      value={scheduledAt}
+                      min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+                      onChange={(e) => setScheduledAt(e.target.value)}
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none focus:border-green-500"
+                    />
+                    <p className="mt-1 text-[11px] text-gray-400">
+                      {scheduledAt ? `Will send on ${new Date(scheduledAt).toLocaleString()}` : "Leave empty to send immediately."}
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
@@ -646,7 +875,7 @@ export default function BroadcastsPage() {
                   className="flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-60"
                 >
                   {sending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
-                  {sending ? "Sending..." : "Send Broadcast"}
+                  {sending ? "Sending..." : scheduledAt ? "Schedule Broadcast" : "Send Broadcast"}
                 </button>
               )}
             </div>

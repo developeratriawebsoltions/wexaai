@@ -21,3 +21,23 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   return NextResponse.json(broadcast);
 }
+
+// DELETE /api/broadcasts/:id — cancel a scheduled broadcast
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const user = getUser(req);
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const workspaceId = await getWorkspaceId(user.id);
+  if (!workspaceId) return NextResponse.json({ error: "No workspace" }, { status: 404 });
+
+  const { id } = await params;
+
+  const broadcast = await prisma.broadcast.findFirst({ where: { id, workspaceId } });
+  if (!broadcast) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (broadcast.status !== "scheduled") {
+    return NextResponse.json({ error: "Only scheduled broadcasts can be cancelled" }, { status: 400 });
+  }
+
+  await prisma.broadcast.update({ where: { id }, data: { status: "cancelled" } });
+  return NextResponse.json({ success: true });
+}

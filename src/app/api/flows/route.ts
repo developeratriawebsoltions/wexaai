@@ -57,10 +57,7 @@ export async function GET(req: NextRequest) {
       workspaceId,
       ...(search
         ? {
-            name: {
-              contains: search,
-              mode: "insensitive",
-            },
+            name: { contains: search },
           }
         : {}),
     },

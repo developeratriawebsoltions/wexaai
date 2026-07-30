@@ -44,8 +44,9 @@ export default function AIAgentPage() {
       .then((r) => r.json())
       .then((d) => Array.isArray(d) && setKnowledge(d));
     authFetch("/api/overview")
-      .then((r) => r.json())
-      .then((d) => d.aiAgent && setOverviewStats({ needsAttention: d.aiAgent.needsAttention, knowledgeCount: d.aiAgent.knowledgeCount, messagesSent: d.stats?.totalOutboundMessages ?? 0, conversationsCount: d.stats?.totalConversations ?? 0, messagesSentChange: d.stats?.outboundMsgChange ?? "0%" }));
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => d?.aiAgent && setOverviewStats({ needsAttention: d.aiAgent.needsAttention, knowledgeCount: d.aiAgent.knowledgeCount, messagesSent: d.stats?.totalOutboundMessages ?? 0, conversationsCount: d.stats?.totalConversations ?? 0, messagesSentChange: d.stats?.outboundMsgChange ?? "0%" }))
+      .catch(() => {});
 
     async function loadConversationLogs() {
       const res = await authFetch("/api/conversations?limit=50");

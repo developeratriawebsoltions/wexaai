@@ -10,10 +10,15 @@ export function getUser(req: NextRequest) {
 }
 
 export async function getWorkspaceId(userId: string) {
-  const m = await prisma.workspaceMember.findFirst({
-    where: { userId },
-    select: { workspaceId: true },
-  });
+  const m =
+    (await prisma.workspaceMember.findFirst({
+      where: { userId, role: "OWNER" },
+      select: { workspaceId: true },
+    })) ??
+    (await prisma.workspaceMember.findFirst({
+      where: { userId },
+      select: { workspaceId: true },
+    }));
   return m?.workspaceId ?? null;
 }
 

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { normalizeTags, serializeTags } from "@/lib/contactTags";
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 
@@ -129,12 +130,13 @@ export async function handleLeadQualification(
     // All questions answered — score the lead
     const { score, intent, summary } = await groqScore(updatedAnswers);
     const stage = score >= 8 ? "qualified" : score >= 5 ? "contacted" : "new";
-    const newTags = contact.tags.includes("lead") ? contact.tags : [...contact.tags, "lead"];
+    const existingTags = normalizeTags(contact.tags);
+    const newTags = existingTags.includes("lead") ? existingTags : [...existingTags, "lead"];
 
     await prisma.contact.update({
       where: { id: contact.id },
       data: {
-        tags: newTags,
+        tags: serializeTags(newTags),
         customFields: {
           ...customFields,
           stage,
@@ -232,12 +234,13 @@ export async function triggerManualQualification(
   });
 
   const stage = score >= 8 ? "qualified" : score >= 5 ? "contacted" : "new";
-  const newTags = contact.tags.includes("lead") ? contact.tags : [...contact.tags, "lead"];
+  const existingTags = normalizeTags(contact.tags);
+  const newTags = existingTags.includes("lead") ? existingTags : [...existingTags, "lead"];
 
   await prisma.contact.update({
     where: { id: contact.id },
     data: {
-      tags: newTags,
+      tags: serializeTags(newTags),
       customFields: {
         ...customFields,
         stage,

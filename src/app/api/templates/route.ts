@@ -37,8 +37,8 @@ export async function GET(req: NextRequest) {
       ...(search
         ? {
             OR: [
-              { name: { contains: search, mode: "insensitive" } },
-              { body: { contains: search, mode: "insensitive" } },
+              { name: { contains: search } },
+              { body: { contains: search } },
             ],
           }
         : {}),
@@ -106,47 +106,94 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Download the Cloudinary image and upload it to Meta to get a valid handle
       let metaHandle: string | null = null;
-      try {
-        const imgRes = await fetch(header);
-        if (!imgRes.ok) throw new Error("Failed to fetch image");
-        const imgBuffer = await imgRes.arrayBuffer();
-        const contentType = imgRes.headers.get("content-type") ?? "image/jpeg";
-        const fileSize = imgBuffer.byteLength;
 
-        // Step 1: Start upload session with Meta
-        const sessionRes = await fetch(`https://graph.facebook.com/v21.0/app/uploads`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${ctx.wa.accessToken}` },
-          body: JSON.stringify({ file_length: fileSize, file_type: contentType, access_token: ctx.wa.accessToken }),
-        });
-        const sessionData = await sessionRes.json();
-        if (!sessionRes.ok || !sessionData.id) throw new Error(sessionData.error?.message ?? "Failed to start Meta upload session");
+      // Check cache: same URL already uploaded before?
+      const cachedAsset = await prisma.mediaAsset.findFirst({
+        where: { workspaceId: ctx.workspaceId, url: header, metaHandle: { not: null } },
+        select: { metaHandle: true },
+      });
 
-        // Step 2: Upload the file bytes to Meta
-        const uploadRes = await fetch(`https://graph.facebook.com/v21.0/${sessionData.id}`, {
-          method: "POST",
-          headers: {
-            Authorization: `OAuth ${ctx.wa.accessToken}`,
-            "file_offset": "0",
-            "Content-Type": contentType,
-          },
-          body: imgBuffer,
-        });
-        const uploadData = await uploadRes.json();
-        if (!uploadRes.ok || !uploadData.h) throw new Error(uploadData.error?.message ?? "Failed to upload image to Meta");
-        metaHandle = uploadData.h;
-      } catch (err: any) {
-        console.error("[Template Create] Meta image upload error:", err.message);
-        return NextResponse.json({ error: `Image upload to Meta failed: ${err.message}` }, { status: 400 });
+      if (cachedAsset?.metaHandle) {
+        // Reuse cached Meta handle — no re-upload needed
+        metaHandle = cachedAsset.metaHandle;
+        console.log("[Template Create] Reusing cached Meta handle:", metaHandle);
+      } else {
+        // Fresh upload to Meta
+        try {
+          const mediaRes = await fetch(header);
+          if (!mediaRes.ok) throw new Error(`Failed to fetch ${headerType.toLowerCase()} media`);
+          const mediaBuffer = await mediaRes.arrayBuffer();
+          const contentType = mediaRes.headers.get("content-type") ?? (headerType === "VIDEO" ? "video/mp4" : headerType === "DOCUMENT" ? "application/pdf" : "image/jpeg");
+
+          const sessionRes = await fetch(`https://graph.facebook.com/v21.0/app/uploads`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${ctx.wa.accessToken}` },
+            body: JSON.stringify({ file_length: mediaBuffer.byteLength, file_type: contentType, access_token: ctx.wa.accessToken }),
+          });
+          const sessionData = await sessionRes.json();
+          if (!sessionRes.ok || !sessionData.id) throw new Error(sessionData.error?.message ?? "Failed to start Meta upload session");
+
+          const uploadRes = await fetch(`https://graph.facebook.com/v21.0/${sessionData.id}`, {
+            method: "POST",
+            headers: { Authorization: `OAuth ${ctx.wa.accessToken}`, "file_offset": "0", "Content-Type": contentType },
+            body: mediaBuffer,
+          });
+          const uploadData = await uploadRes.json();
+          if (!uploadRes.ok || !uploadData.h) throw new Error(uploadData.error?.message ?? `Failed to upload ${headerType.toLowerCase()} to Meta`);
+          metaHandle = uploadData.h;
+
+          // Save handle to MediaAsset cache
+          const existingAsset = await prisma.mediaAsset.findFirst({
+            where: { workspaceId: ctx.workspaceId, url: header },
+            select: { id: true },
+          });
+
+          const assetName = typeof header === "string"
+            ? header.split("/").filter(Boolean).pop() ?? `${headerType.toLowerCase()}-header`
+            : `${headerType.toLowerCase()}-header`;
+
+          if (existingAsset?.id) {
+            await prisma.mediaAsset.update({
+              where: { id: existingAsset.id },
+              data: {
+                name: assetName,
+                url: header,
+                publicId: "",
+                metaHandle,
+                fileType: headerType.toLowerCase(),
+              },
+            }).catch(() => {});
+          } else {
+            await prisma.mediaAsset.create({
+              data: {
+                workspaceId: ctx.workspaceId,
+                name: assetName,
+                url: header,
+                publicId: "",
+                metaHandle,
+                fileType: headerType.toLowerCase(),
+              },
+            }).catch(() => {});
+          }
+        } catch (err: any) {
+          console.error("[Template Create] Meta media upload error:", err.message);
+          return NextResponse.json({ error: `Media upload to Meta failed: ${err.message}` }, { status: 400 });
+        }
       }
 
+      // Save metaHandle on template too
       components.push({
         type: "HEADER",
         format: headerType,
         ...(metaHandle ? { example: { header_handle: [metaHandle] } } : {}),
       });
+    } else if (headerType === "LOCATION") {
+      const locationPayload = typeof header === "string" ? (() => { try { return JSON.parse(header); } catch { return null; } })() : null;
+      if (!locationPayload || !locationPayload.latitude || !locationPayload.longitude) {
+        return NextResponse.json({ error: "Please enter a valid location to use the location header." }, { status: 400 });
+      }
+      components.push({ type: "HEADER", format: "LOCATION" });
     } else if (header) {
       components.push({
         type: "HEADER",
@@ -191,13 +238,16 @@ export async function POST(req: NextRequest) {
     components.push({ type: "FOOTER", text: footer });
   }
 
-  type ButtonInput = { type: string; text: string; url?: string; phone_number?: string };
+  type ButtonInput = { type: string; text: string; url?: string; phone_number?: string; example?: string; flow_id?: string; flow_name?: string };
   if (buttons?.length) {
     components.push({
       type: "BUTTONS",
       buttons: buttons.map((b: ButtonInput) => {
         if (b.type === "URL") return { type: "URL", text: b.text, url: b.url };
         if (b.type === "PHONE_NUMBER") return { type: "PHONE_NUMBER", text: b.text, phone_number: b.phone_number };
+        if (b.type === "COPY_CODE") return { type: "COPY_CODE", text: b.text, example: b.example };
+        if (b.type === "COUPON_CODE") return { type: "COUPON_CODE", text: b.text, example: b.example };
+        if (b.type === "FLOW") return { type: "FLOW", text: b.text, ...(b.flow_id ? { flow_id: b.flow_id } : {}), ...(b.flow_name ? { flow_name: b.flow_name } : {}) };
         return { type: "QUICK_REPLY", text: b.text };
       }),
     });
@@ -251,6 +301,7 @@ export async function POST(req: NextRequest) {
       language,
       header: header ?? null,
       headerType: headerType ?? null,
+      headerHandle: components.find((c: any) => c.type === "HEADER")?.example?.header_handle?.[0] ?? null,
       body,
       footer: footer ?? null,
       buttons: buttons ? buttons as Prisma.InputJsonValue : Prisma.JsonNull,

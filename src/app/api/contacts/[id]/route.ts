@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getUser, getWorkspaceId } from "@/lib/apiHelpers";
+import { normalizeTags, serializeTags } from "@/lib/contactTags";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -16,7 +17,10 @@ export async function GET(req: NextRequest, { params }: Params) {
   const contact = await prisma.contact.findFirst({ where: { id, workspaceId } });
   if (!contact) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  return NextResponse.json(contact);
+  return NextResponse.json({
+    ...contact,
+    tags: normalizeTags(contact.tags),
+  });
 }
 
 // PATCH /api/contacts/:id
@@ -36,7 +40,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     data: {
       ...(name !== undefined ? { name } : {}),
       ...(email !== undefined ? { email } : {}),
-      ...(tags !== undefined ? { tags } : {}),
+      ...(tags !== undefined ? { tags: serializeTags(tags) } : {}),
       ...(optedOut !== undefined ? { optedOut } : {}),
       ...(customFields !== undefined ? { customFields } : {}),
     },

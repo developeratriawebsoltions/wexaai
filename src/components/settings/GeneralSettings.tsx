@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Mail, Phone, Clock, Globe, ImageIcon, Save } from 'lucide-react';
+import { Mail, Phone, Clock, Globe, ImageIcon, Save, Zap } from 'lucide-react';
 
 interface GeneralSettingsProps {
   workspaceId: string;
@@ -22,6 +22,17 @@ export default function GeneralSettings({ workspaceId, initialData, onSave }: Ge
     logo:     initialData?.logo     || '',
   });
 
+  const [welcomeEnabled, setWelcomeEnabled] = useState<boolean>(initialData?.welcomeTemplateEnabled ?? false);
+  const [welcomeTemplate, setWelcomeTemplate] = useState<string>(initialData?.welcomeTemplateName ?? '');
+  const [templates, setTemplates] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    fetch('/api/templates?status=APPROVED', { credentials: 'include' })
+      .then((r) => r.json())
+      .then((d) => setTemplates(Array.isArray(d) ? d : []))
+      .catch(() => {});
+  }, []);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -33,7 +44,11 @@ export default function GeneralSettings({ workspaceId, initialData, onSave }: Ge
       const res = await fetch(`/api/settings/general?workspaceId=${workspaceId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          welcomeTemplateEnabled: welcomeEnabled,
+          welcomeTemplateName: welcomeTemplate || null,
+        }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -113,6 +128,50 @@ export default function GeneralSettings({ workspaceId, initialData, onSave }: Ge
             </select>
           </div>
         </div>
+      </div>
+
+      {/* Welcome Template */}
+      <div className="rounded-xl border border-gray-200 p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Zap size={16} className="text-orange-500" />
+            <div>
+              <p className="text-sm font-semibold text-gray-800">Welcome Template</p>
+              <p className="text-xs text-gray-500">Auto-send a WhatsApp template when a new contact is added.</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setWelcomeEnabled((v) => !v)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              welcomeEnabled ? 'bg-green-500' : 'bg-gray-200'
+            }`}
+          >
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+              welcomeEnabled ? 'translate-x-6' : 'translate-x-1'
+            }`} />
+          </button>
+        </div>
+
+        {welcomeEnabled && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Select Template</label>
+            {templates.length === 0 ? (
+              <p className="text-xs text-yellow-600 bg-yellow-50 rounded-lg px-3 py-2">No approved templates found. Please get a template approved first.</p>
+            ) : (
+              <select
+                value={welcomeTemplate}
+                onChange={(e) => setWelcomeTemplate(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              >
+                <option value="">-- Select a template --</option>
+                {templates.map((t) => (
+                  <option key={t.id} value={t.name}>{t.name}</option>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
       </div>
 
       <Button onClick={handleSave} disabled={loading} className="gap-2 bg-green-600 hover:bg-green-700">

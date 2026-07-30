@@ -1,0 +1,192 @@
+================================================================
+       WEXA AI  vs  WATI / INTERAKT (WhatsApp Business Platforms)
+       Full Feature Comparison
+================================================================
+
+----------------------------------------------------------------
+1. CORE MESSAGING & INBOX
+----------------------------------------------------------------
+
+FEATURE                          WEXA AI          WATI/INTERAKT
+-----------------------------------------------------------------
+Shared Team Inbox                ✅ Yes           ✅ Yes
+Multi-agent on 1 number          ✅ Yes           ✅ Yes
+Unread message badge/count       ✅ Yes           ✅ Yes
+Conversation assignment          ✅ Yes           ✅ Yes
+Omnichannel (WA+IG+FB)           ✅ Planned       ❌ WhatsApp only (WATI)
+Quick Replies                    ✅ Yes           ✅ Yes
+Message Templates                ✅ Yes           ✅ Yes
+Template Sync (Meta)             ✅ Yes           ✅ Yes
+
+----------------------------------------------------------------
+2. AI & AUTOMATION
+----------------------------------------------------------------
+
+FEATURE                          WEXA AI          WATI/INTERAKT
+-----------------------------------------------------------------
+AI Auto Reply (GPT-4o)           ✅ Yes           ⚠️  Limited / No GPT
+Custom AI Agent Training         ✅ Yes           ❌ No
+Knowledge Base for AI            ✅ Yes           ❌ No
+AI Lead Qualification            ✅ Yes           ❌ No
+Flow Builder (Visual)            ✅ Yes           ✅ Yes (WATI)
+Chatbot Builder                  ✅ Yes           ✅ Yes
+AI Booking Scheduler             ✅ Yes           ❌ No
+
+----------------------------------------------------------------
+3. BROADCASTING & CAMPAIGNS
+----------------------------------------------------------------
+
+FEATURE                          WEXA AI          WATI/INTERAKT
+-----------------------------------------------------------------
+Bulk WhatsApp Broadcast          ✅ Yes           ✅ Yes
+Broadcast with Templates         ✅ Yes           ✅ Yes
+Campaign Analytics               ✅ Yes           ✅ Yes
+Audience Segmentation            ✅ Yes           ✅ Yes (WATI)
+
+----------------------------------------------------------------
+4. CONTACTS & CRM
+----------------------------------------------------------------
+
+FEATURE                          WEXA AI          WATI/INTERAKT
+-----------------------------------------------------------------
+Contact Management               ✅ Yes           ✅ Yes
+Contact Import (CSV)             ✅ Yes           ✅ Yes
+Tags & Notes                     ✅ Yes           ✅ Yes
+CRM (Kanban Board)               ✅ Yes           ❌ No (basic only)
+Lead Pipeline                    ✅ Yes           ❌ No
+Bookings / Appointments          ✅ Yes           ❌ No
+
+----------------------------------------------------------------
+5. INTEGRATIONS
+----------------------------------------------------------------
+
+FEATURE                          WEXA AI          WATI/INTERAKT
+-----------------------------------------------------------------
+WhatsApp Cloud API (Meta)        ✅ Yes           ✅ Yes
+Meta Business Suite              ✅ Yes           ✅ Yes
+Zapier                           ✅ Yes           ✅ Yes (WATI)
+Make (Integromat)                ✅ Yes           ✅ Yes (WATI)
+HubSpot                          🔜 Coming Soon   ✅ Yes (Interakt)
+Shopify                          🔜 Coming Soon   ✅ Yes (Interakt)
+WooCommerce                      🔜 Coming Soon   ✅ Yes (Interakt)
+Zendesk                          🔜 Coming Soon   ❌ No
+Slack                            🔜 Coming Soon   ❌ No
+Google Sheets                    🔜 Coming Soon   ❌ No
+Zoho CRM                         🔜 Coming Soon   ⚠️  Limited
+Pipedrive                        🔜 Coming Soon   ❌ No
+Webhook Support                  ✅ Yes           ✅ Yes
+API Access                       ✅ Yes (Enterprise) ✅ Yes
+
+----------------------------------------------------------------
+6. ANALYTICS & REPORTING
+----------------------------------------------------------------
+
+FEATURE                          WEXA AI          WATI/INTERAKT
+-----------------------------------------------------------------
+Overview Dashboard               ✅ Yes           ✅ Yes
+Message Analytics (7-day chart)  ✅ Yes           ✅ Yes
+Inbound / Outbound Stats         ✅ Yes           ✅ Yes
+Top Agent Performance            ✅ Yes           ✅ Yes
+Conversation Trends              ✅ Yes           ✅ Yes
+Contact Growth Tracking          ✅ Yes           ⚠️  Limited
+
+----------------------------------------------------------------
+7. TEAM & WORKSPACE
+----------------------------------------------------------------
+
+FEATURE                          WEXA AI          WATI/INTERAKT
+-----------------------------------------------------------------
+Role-Based Access (Owner/Manager/Agent) ✅ Yes   ✅ Yes
+Team Member Invites              ✅ Yes           ✅ Yes
+Workspace Settings               ✅ Yes           ✅ Yes
+Multi-workspace                  ❌ Single        ✅ Yes (WATI Enterprise)
+
+----------------------------------------------------------------
+8. SECURITY & SETTINGS
+----------------------------------------------------------------
+
+FEATURE                          WEXA AI          WATI/INTERAKT
+-----------------------------------------------------------------
+API Key Management               ✅ Yes           ✅ Yes
+Webhook Configuration            ✅ Yes           ✅ Yes
+Notification Settings            ✅ Yes           ✅ Yes
+Security Settings                ✅ Yes           ✅ Yes
+Danger Zone (Delete workspace)   ✅ Yes           ✅ Yes
+2FA / OTP Login                  ✅ Yes           ✅ Yes
+
+----------------------------------------------------------------
+9. BILLING & PLANS
+----------------------------------------------------------------
+
+FEATURE                          WEXA AI          WATI/INTERAKT
+-----------------------------------------------------------------
+Starter Plan                     ✅ ₹999/mo       ~$49/mo (WATI)
+Growth Plan                      ✅ ₹2,999/mo     ~$99/mo (WATI)
+Enterprise Plan                  ✅ Custom         Custom
+Usage-based Billing              ✅ Message limits ✅ Conversation-based
+Invoice History                  ✅ Yes           ✅ Yes
+Plan Upgrade/Downgrade           ✅ Yes           ✅ Yes
+14-day Free Trial                ✅ Yes           ✅ Yes (WATI)
+No Credit Card Required          ✅ Yes           ⚠️  Varies
+
+----------------------------------------------------------------
+10. LANDING PAGE & MARKETING PAGES
+----------------------------------------------------------------
+
+FEATURE                          WEXA AI          WATI/INTERAKT
+-----------------------------------------------------------------
+Hero Section                     ✅ Yes           ✅ Yes
+Features Section                 ✅ Yes           ✅ Yes
+How It Works Section             ✅ Yes           ✅ Yes
+Pricing Section                  ✅ Yes           ✅ Yes
+FAQ Section                      ✅ Yes           ✅ Yes
+Industry Use Cases               ✅ Yes           ✅ Yes
+Navbar with Dropdowns            ✅ Yes           ✅ Yes
+  - Features Dropdown (10 items) ✅ Yes           ✅ Yes
+  - Integrations Dropdown        ✅ Yes           ✅ Yes
+  - Pricing Dropdown             ✅ Yes           ❌ No (direct link)
+
+----------------------------------------------------------------
+11. UNIQUE ADVANTAGES — WEXA AI
+----------------------------------------------------------------
+
+✅ GPT-4o powered AI Agent (most competitors use basic bots)
+✅ Custom Knowledge Base training for AI
+✅ Visual Kanban CRM built-in
+✅ Appointment Booking system built-in
+✅ AI Lead Qualification built-in
+✅ Visual Flow Builder
+✅ INR pricing (India-friendly, much cheaper than WATI)
+✅ Omnichannel inbox (WhatsApp + Instagram + Facebook) — planned
+✅ Modern Next.js dashboard with real-time unread counts
+
+----------------------------------------------------------------
+12. AREAS WHERE WATI/INTERAKT LEADS (currently)
+----------------------------------------------------------------
+
+⚠️  More native CRM integrations (HubSpot, Shopify live)
+⚠️  Multi-workspace support
+⚠️  Larger existing customer base & brand recognition
+⚠️  More mature integration ecosystem
+
+================================================================
+SUMMARY SCORE
+================================================================
+
+Category                    Wexa AI     WATI/Interakt
+-----------------------------------------------------
+AI & Automation             10/10       5/10
+Core Messaging              9/10        9/10
+CRM & Contacts              9/10        6/10
+Integrations                7/10        8/10
+Analytics                   8/10        7/10
+Pricing (Value)             10/10       6/10
+Team & Security             9/10        9/10
+-----------------------------------------------------
+TOTAL                       62/70       50/70
+
+================================================================
+NOTE: WATI and Interakt are separate products. This comparison
+uses publicly known features. "Coming Soon" items in Wexa AI
+are listed in the integrations page as planned features.
+================================================================

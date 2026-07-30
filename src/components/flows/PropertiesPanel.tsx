@@ -104,28 +104,16 @@ function TemplateConfig({ node, onUpdate }: { node: Node; onUpdate: (d: Record<s
         )}
       </div>
 
-      {/* Image header URL — only shown when selected template has IMAGE header */}
-      {isImageTemplate && (
+      {/* Show Cloudinary header preview if available */}
+      {isImageTemplate && selected?.header?.includes("cloudinary.com") && (
         <div>
-          <label className={labelCls}>Header Image URL</label>
-          <input
-            className={inputCls}
-            placeholder="https://example.com/image.jpg"
-            value={(node.data.headerImageUrl as string) || ""}
-            onChange={(e) => onUpdate({ headerImageUrl: e.target.value })}
+          <p className="text-[10px] font-bold tracking-widest text-gray-500 mb-1.5 uppercase">Header Image</p>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={selected.header}
+            alt="header"
+            className="w-full h-28 object-cover rounded-lg border border-gray-200"
           />
-          {/* Live preview */}
-          {(node.data.headerImageUrl as string) && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={node.data.headerImageUrl as string}
-              alt="header preview"
-              className="mt-2 w-full h-28 object-cover rounded-lg border border-gray-200"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-              onLoad={(e) => { (e.target as HTMLImageElement).style.display = "block"; }}
-            />
-          )}
-          <p className="text-[11px] text-gray-400 mt-1">Must be a permanent public URL (HTTPS)</p>
         </div>
       )}
 

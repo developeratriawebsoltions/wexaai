@@ -13,7 +13,7 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    const { email, phone, timezone, language, logo } = body;
+    const { email, phone, timezone, language, logo, welcomeTemplateEnabled, welcomeTemplateName } = body;
 
     // Update or create workspace settings
     const settings = await prisma.workspaceSettings.upsert({
@@ -25,6 +25,8 @@ export async function PATCH(req: NextRequest) {
         timezone,
         language,
         logo,
+        welcomeTemplateEnabled: welcomeTemplateEnabled ?? false,
+        welcomeTemplateName: welcomeTemplateName ?? null,
       },
       update: {
         ...(email && { email }),
@@ -32,6 +34,8 @@ export async function PATCH(req: NextRequest) {
         ...(timezone && { timezone }),
         ...(language && { language }),
         ...(logo && { logo }),
+        ...(welcomeTemplateEnabled !== undefined && { welcomeTemplateEnabled }),
+        ...(welcomeTemplateName !== undefined && { welcomeTemplateName }),
       },
     });
 

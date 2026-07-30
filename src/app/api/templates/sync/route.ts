@@ -14,7 +14,7 @@ type MetaTemplate = {
     format?: string;
     text?: string;
     example?: { header_handle?: string[]; header_url?: string[] };
-    buttons?: Array<{ type: string; text: string; url?: string; phone_number?: string }>;
+    buttons?: Array<{ type: string; text: string; url?: string; phone_number?: string; example?: string; flow_id?: string; flow_name?: string }>;
   }>;
 };
 
@@ -22,41 +22,79 @@ function extractComponent(components: MetaTemplate["components"], type: string) 
   return components?.find((c) => c.type === type);
 }
 
+function getMetaHeaders(accessToken: string) {
+  return {
+    Authorization: `Bearer ${accessToken}`,
+    "Content-Type": "application/json",
+  };
+}
+
 // POST /api/templates/sync
 export async function POST(req: NextRequest) {
   const user = getUser(req);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const membership = await prisma.workspaceMember.findFirst({
-    where: { userId: user.id },
-    select: { workspaceId: true },
-  });
+  const workspaceIdHeader = req.headers.get("x-workspace-id");
+
+  const membership = workspaceIdHeader
+    ? await prisma.workspaceMember.findFirst({
+        where: { userId: user.id, workspaceId: workspaceIdHeader },
+        select: { workspaceId: true },
+      })
+    : await prisma.workspaceMember.findFirst({
+        where: { userId: user.id, role: "OWNER" },
+        select: { workspaceId: true },
+      }) ??
+      await prisma.workspaceMember.findFirst({
+        where: { userId: user.id },
+        select: { workspaceId: true },
+      });
+
   if (!membership) return NextResponse.json({ error: "No workspace" }, { status: 404 });
 
   const wa = await prisma.whatsAppAccount.findUnique({
     where: { workspaceId: membership.workspaceId },
   });
-  if (!wa || wa.status !== "active") {
+  const normalizedStatus = (wa?.status ?? "").toLowerCase();
+  if (!wa || !["active", "connected", "verified"].includes(normalizedStatus)) {
     return NextResponse.json({ error: "WhatsApp not connected" }, { status: 400 });
+  }
+
+  if (!wa.wabaId || !wa.accessToken) {
+    return NextResponse.json({ error: "WhatsApp account is missing WABA ID or access token. Please reconnect in Settings." }, { status: 400 });
   }
 
   // Fetch all templates from Meta — paginate if needed
   let allTemplates: MetaTemplate[] = [];
-  let url: string | null = `https://graph.facebook.com/v21.0/${wa.wabaId}/message_templates?limit=100&access_token=${wa.accessToken}`;
+  let nextUrl: string | null = `https://graph.facebook.com/v21.0/${wa.wabaId}/message_templates?limit=100`;
 
-  while (url) {
-    const res = await fetch(url);
-    const data = await res.json() as { data?: MetaTemplate[]; paging?: { next?: string }; error?: { message?: string } };
+  while (nextUrl) {
+    const res = await fetch(nextUrl, { headers: getMetaHeaders(wa.accessToken) });
+    const data = await res.json() as {
+      data?: MetaTemplate[];
+      paging?: { next?: string };
+      error?: { message?: string; code?: number; error_subcode?: number; type?: string; fbtrace_id?: string };
+    };
 
     if (!res.ok || data.error) {
-      return NextResponse.json(
-        { error: data.error?.message ?? "Failed to fetch from Meta" },
-        { status: 400 }
-      );
+      console.error("[Sync] Meta API error:", JSON.stringify(data.error));
+      const errCode = data.error?.code;
+      const errSubcode = data.error?.error_subcode;
+      const rawMessage = data.error?.message ?? "Failed to fetch from Meta";
+      const friendlyMessage = errCode === 190 || errCode === 102 || errSubcode === 460 || errSubcode === 467
+        ? "Meta rejected the WhatsApp connection. Please reconnect WhatsApp and ensure the app has the required WhatsApp Business permissions."
+        : rawMessage;
+      return NextResponse.json({
+        error: friendlyMessage,
+        code: errCode,
+        subcode: errSubcode,
+        type: data.error?.type ?? null,
+        fbtrace_id: data.error?.fbtrace_id ?? null,
+      }, { status: 400 });
     }
 
     allTemplates = allTemplates.concat(data.data ?? []);
-    url = data.paging?.next ?? null;
+    nextUrl = data.paging?.next ?? null;
   }
 
   // Upsert each template into DB
@@ -73,9 +111,26 @@ export async function POST(req: NextRequest) {
       text: b.text,
       url: b.url,
       phone_number: b.phone_number,
+      example: b.example,
+      flow_id: b.flow_id,
+      flow_name: b.flow_name,
     })) ?? Prisma.JsonNull;
 
-    const headerUrl = headerComp?.text ?? headerComp?.example?.header_url?.[0] ?? null;
+    const headerUrl = headerComp?.format === "TEXT"
+      ? (headerComp?.text ?? null)
+      : (headerComp?.example?.header_url?.[0] ?? headerComp?.example?.header_handle?.[0] ?? null);
+
+    const isExpiringUrl = (u: string | null) => !!u && u.includes("scontent.whatsapp.net");
+    // For update: use headerUrl only if it's a permanent URL (cloudinary etc)
+    // If current DB header is an expired scontent URL, clear it to null
+    const existing = await prisma.template.findUnique({
+      where: { workspaceId_name_language: { workspaceId: membership.workspaceId, name: t.name, language: t.language } },
+      select: { header: true },
+    });
+    const currentHeader = existing?.header ?? null;
+    const headerForUpdate = isExpiringUrl(currentHeader)
+      ? null  // clear expired scontent URL
+      : (headerUrl && !isExpiringUrl(headerUrl) ? headerUrl : undefined); // undefined = don't touch
 
     await prisma.template.upsert({
       where: {
@@ -89,8 +144,8 @@ export async function POST(req: NextRequest) {
         metaTemplateId: t.id,
         status: t.status,
         category: t.category,
-        // Only update header if we have a real URL — don't overwrite Cloudinary URL with Meta handle
-        ...(headerUrl ? { header: headerUrl } : {}),
+        // Never overwrite a permanent (Cloudinary) URL with an expiring scontent URL
+        ...(headerForUpdate !== undefined ? { header: headerForUpdate } : {}),
         headerType: headerComp?.format ?? null,
         body: bodyComp?.text ?? "",
         footer: footerComp?.text ?? null,

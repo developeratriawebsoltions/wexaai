@@ -6,6 +6,9 @@ import { runFlow } from "@/lib/flow-runner";
 import { handleLeadQualification } from "@/lib/lead-qualifier";
 import { handleBookingScheduler } from "@/lib/booking-scheduler";
 
+import { pushStatusToSheet } from "@/app/api/integrations/google-sheets/two-way-sync/route";
+import { parseTemplateUpdateFromChange, getTemplateEventPayload } from "./webhook-utils";
+
 const VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN ?? "wexa_verify_2026";
 
 export async function GET(req: NextRequest) {
@@ -36,10 +39,49 @@ async function processWebhook(body: unknown) {
     : null;
   if (!value) return;
 
-  const webhookValue = value as Record<string, unknown>;
+  const webhookValue = value as Record<string, any>;
   const phoneNumberId: string = (webhookValue?.metadata as Record<string, string>)?.phone_number_id;
   if (!phoneNumberId) return;
   console.log("[Webhook] phoneNumberId:", phoneNumberId);
+
+  const templateChanges = Array.isArray(webhookValue.changes) ? webhookValue.changes : [];
+  for (const change of templateChanges) {
+    const parsed = parseTemplateUpdateFromChange(change);
+    if (!parsed) continue;
+
+    const templateName = parsed.templateName || "unknown_template";
+    const existingTemplate = await prisma.template.findFirst({
+      where: { workspaceId: (await prisma.workspace.findFirst({ where: { whatsappAccount: { phoneNumberId } } }))?.id ?? "", name: templateName },
+    }).catch(() => null);
+
+    if (!existingTemplate) continue;
+
+    const updatePayload: Record<string, any> = {
+      status: parsed.status,
+      rejectedReason: parsed.status === "REJECTED" ? parsed.rejectionReason ?? "Template rejected by Meta" : null,
+    };
+
+    if (parsed.components?.length) {
+      const components = parsed.components;
+      const headerComponent = components.find((c: any) => c.type === "HEADER");
+      const bodyComponent = components.find((c: any) => c.type === "BODY");
+      const footerComponent = components.find((c: any) => c.type === "FOOTER");
+      const buttonsComponent = components.find((c: any) => c.type === "BUTTONS");
+
+      if (headerComponent) {
+        updatePayload.headerType = headerComponent.format ?? existingTemplate.headerType;
+        updatePayload.header = headerComponent.example?.header_handle?.[0] ?? headerComponent.text ?? existingTemplate.header;
+      }
+      if (bodyComponent) updatePayload.body = bodyComponent.text ?? existingTemplate.body;
+      if (footerComponent) updatePayload.footer = footerComponent.text ?? existingTemplate.footer;
+      if (buttonsComponent) updatePayload.buttons = buttonsComponent.buttons ?? existingTemplate.buttons;
+    }
+
+    await prisma.template.updateMany({
+      where: { workspaceId: existingTemplate.workspaceId, name: templateName },
+      data: updatePayload,
+    }).catch(() => {});
+  }
 
   // ── Handle outbound delivery status updates ──
   // FIX: Do NOT early return — same webhook call can contain both statuses + messages
@@ -50,6 +92,12 @@ async function processWebhook(body: unknown) {
       await prisma.message.updateMany({
         where: { waMessageId: s.id },
         data: { status: s.status },
+      }).catch(() => {});
+
+      const broadcastStatus = s.status === "read" ? "read" : s.status === "delivered" ? "delivered" : s.status;
+      await prisma.broadcastLog.updateMany({
+        where: { messageId: s.id },
+        data: { status: broadcastStatus },
       }).catch(() => {});
     }
     // NO early return here — fall through to check messages too
@@ -193,6 +241,21 @@ async function processWebhook(body: unknown) {
         unreadCount: 1,
       },
     });
+
+    // Mark broadcast log as replied if this contact received a broadcast
+    await prisma.broadcastLog.updateMany({
+      where: { phone: contactPhone, status: { in: ["sent", "delivered", "read"] } },
+      data: { status: "replied" },
+    }).catch(() => {});
+
+    // Two-way sync — push conversation update to Google Sheet
+    pushStatusToSheet(workspaceId, {
+      phone: contactPhone,
+      name: contactName || "Unknown",
+      status: "replied",
+      lastMessage: text,
+      updatedAt: new Date().toISOString(),
+    }).catch(() => {});
 
     await prisma.message.create({
       data: {

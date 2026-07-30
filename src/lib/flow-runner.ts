@@ -59,7 +59,8 @@ async function sendTemplateMessage(
   if (template?.headerType) {
     const isMedia = ["IMAGE", "VIDEO", "DOCUMENT"].includes(template.headerType);
     if (isMedia) {
-      const mediaLink = headerImageUrl || template.header || "";
+      const isCloudinary = (u?: string | null) => !!u && u.includes("cloudinary.com");
+      const mediaLink = isCloudinary(template.header) ? template.header : (headerImageUrl || template.header || "");
       if (mediaLink) {
         const mediaKey = template.headerType.toLowerCase() as "image" | "video" | "document";
         components.push({

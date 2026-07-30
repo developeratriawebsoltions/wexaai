@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { normalizeTags, serializeTags } from "@/lib/contactTags";
 
 export type ToolName =
   | "search_knowledge"
@@ -54,14 +55,15 @@ export async function qualifyLead(
       ? (contact.customFields as Record<string, unknown>)
       : {};
 
-  const newTags = contact.tags.includes("lead")
-    ? contact.tags
-    : [...contact.tags, "lead"];
+  const existingTags = normalizeTags(contact.tags);
+  const newTags = existingTags.includes("lead")
+    ? existingTags
+    : [...existingTags, "lead"];
 
   await prisma.contact.update({
     where: { id: contact.id },
     data: {
-      tags: newTags,
+      tags: serializeTags(newTags),
       customFields: {
         ...existingFields,
         stage: score >= 7 ? "qualified" : "contacted",
@@ -115,7 +117,8 @@ export async function getContactInfo(
 
   const fields = contact.customFields as Record<string, unknown> | null;
   const stage = fields?.stage ?? "new";
-  const info = `Name: ${contact.name}, Tags: ${contact.tags.join(", ") || "none"}, Stage: ${stage}, Customer since: ${contact.createdAt.toDateString()}`;
+  const tagList = normalizeTags(contact.tags);
+  const info = `Name: ${contact.name}, Tags: ${tagList.join(", ") || "none"}, Stage: ${stage}, Customer since: ${contact.createdAt.toDateString()}`;
 
   return { success: true, data: info };
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Search, Edit2, Trash2, X, Plus, RefreshCw, Upload, Download, CheckCircle2, AlertCircle } from "lucide-react";
+import { Search, Edit2, Trash2, X, Plus, RefreshCw, Upload, Download, CheckCircle2, AlertCircle, Sheet } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
 interface Contact {
@@ -232,6 +232,96 @@ function ImportModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
   );
 }
 
+// ── GOOGLE SHEETS IMPORT MODAL ───────────────────────────────────────────────
+function GoogleSheetsModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const [url, setUrl] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<{ imported: number; skipped: number; errors: string[] } | null>(null);
+  const [error, setError] = useState("");
+
+  const doImport = async () => {
+    setError("");
+    if (!url.trim()) { setError("Please enter a Google Sheets URL"); return; }
+    setLoading(true);
+    const res = await authFetch("/api/contacts/import-sheets", {
+      method: "POST",
+      body: JSON.stringify({ sheetUrl: url.trim() }),
+    });
+    const data = await res.json();
+    setLoading(false);
+    if (!res.ok) { setError(data.error ?? "Import failed"); return; }
+    setResult(data);
+    if (data.imported > 0) onSaved();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+        <div className="mb-5 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-gray-900">Import from Google Sheets</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+        </div>
+
+        {!result ? (
+          <>
+            <div className="mb-4 rounded-lg bg-blue-50 border border-blue-100 px-4 py-3 text-xs text-blue-700 space-y-1">
+              <p className="font-semibold">How to share your Google Sheet:</p>
+              <ol className="list-decimal list-inside space-y-0.5 text-blue-600">
+                <li>Open your Google Sheet</li>
+                <li>File → Share → Publish to web</li>
+                <li>Select <span className="font-mono">Sheet1</span> and <span className="font-mono">Comma-separated values (.csv)</span></li>
+                <li>Click Publish and copy the link</li>
+              </ol>
+              <p className="mt-1 text-blue-500">Sheet must have columns: <span className="font-mono">name, phone, email, tags</span></p>
+            </div>
+
+            <div className="mb-4">
+              <label className="mb-1 block text-xs font-medium text-gray-600">Google Sheets URL</label>
+              <input
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://docs.google.com/spreadsheets/d/..."
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+              />
+            </div>
+
+            {error && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>}
+
+            <div className="flex justify-end gap-2">
+              <button onClick={onClose} className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={doImport} disabled={loading}
+                className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
+                {loading ? "Importing..." : "Import Contacts"}
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="flex flex-col items-center py-6 text-center">
+            <CheckCircle2 size={48} className="text-green-500 mb-3" />
+            <p className="text-lg font-semibold text-gray-800">Import Complete</p>
+            <div className="mt-4 flex gap-6">
+              <div className="text-center">
+                <p className="text-2xl font-bold text-green-600">{result.imported}</p>
+                <p className="text-xs text-gray-500">Imported</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-gray-400">{result.skipped}</p>
+                <p className="text-xs text-gray-500">Skipped</p>
+              </div>
+            </div>
+            {result.errors.length > 0 && (
+              <div className="mt-3 flex items-center gap-1 text-xs text-red-500">
+                <AlertCircle size={12} /> Failed: {result.errors.join(", ")}
+              </div>
+            )}
+            <button onClick={onClose} className="mt-6 rounded-lg bg-blue-600 px-6 py-2 text-sm font-semibold text-white hover:bg-blue-700">Done</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ContactModal({ contact, onClose, onSaved }: ContactModalProps) {
   const [name, setName] = useState(contact?.name ?? "");
   const [phone, setPhone] = useState(contact?.phone ?? "");
@@ -343,6 +433,7 @@ export default function ContactsPage() {
   const [selected, setSelected] = useState<string[]>([]);
   const [modal, setModal] = useState<{ open: boolean; contact?: Contact | null }>({ open: false });
   const [importOpen, setImportOpen] = useState(false);
+  const [sheetsOpen, setSheetsOpen] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
 
   const LIMIT = 20;
@@ -427,9 +518,13 @@ export default function ContactsPage() {
               <button onClick={fetchContacts} className="rounded-lg border border-gray-200 p-1.5 text-gray-400 hover:bg-gray-50">
                 <RefreshCw size={14} />
               </button>
+              <button onClick={() => setSheetsOpen(true)}
+                className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100">
+                <Sheet size={13} /> Google Sheets
+              </button>
               <button onClick={() => setImportOpen(true)}
                 className="flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-100">
-                <Upload size={13} /> Import
+                <Upload size={13} /> Import CSV
               </button>
               <button onClick={() => setModal({ open: true, contact: null })}
                 className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700">
@@ -510,7 +605,7 @@ export default function ContactsPage() {
                     <td className="px-3 py-3 text-gray-400 text-xs">{c.email ?? "—"}</td>
                     <td className="px-3 py-3">
                       <div className="flex flex-wrap gap-1">
-                        {c.tags.length > 0
+                        {Array.isArray(c.tags) && c.tags.length > 0
                           ? c.tags.map((t) => (
                               <span key={t} className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${tagColor(t)}`}>{t}</span>
                             ))
@@ -564,6 +659,10 @@ export default function ContactsPage() {
 
       {importOpen && (
         <ImportModal onClose={() => setImportOpen(false)} onSaved={fetchContacts} />
+      )}
+
+      {sheetsOpen && (
+        <GoogleSheetsModal onClose={() => setSheetsOpen(false)} onSaved={fetchContacts} />
       )}
 
       {modal.open && (

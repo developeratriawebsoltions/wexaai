@@ -42,7 +42,7 @@ const initialCoreIntegrations = [
     name: "Zapier",
     desc: "Automate workflows by connecting with 6,000+ apps.",
     icon: "https://cdn.worldvectorlogo.com/logos/zapier-1.svg",
-    connected: false,
+    connected: true,
     connectedAt: null,
   },
   {
@@ -57,15 +57,15 @@ const initialCoreIntegrations = [
 
 const categories = ["All", "CRM", "Marketing", "E-commerce", "Support", "Productivity", "Payment"];
 
-const otherIntegrations = [
-  { name: "Slack", desc: "Get real-time notifications and stay updated in your channels.", icon: "https://upload.wikimedia.org/wikipedia/commons/d/d5/Slack_icon_2019.svg", category: "Productivity" },
-  { name: "Google Sheets", desc: "Sync contacts, leads and data automatically.", icon: "https://upload.wikimedia.org/wikipedia/commons/3/30/Google_Sheets_logo_%282014-2020%29.svg", category: "Productivity" },
-  { name: "HubSpot", desc: "Sync contacts and automate customer conversations.", icon: "https://www.hubspot.com/hubfs/HubSpot_Logos/HubSpot-Inversed-Favicon.png", category: "CRM" },
-  { name: "Pipedrive", desc: "Manage leads and deals from WhatsApp conversations.", icon: "https://cdn.worldvectorlogo.com/logos/pipedrive.svg", category: "CRM" },
-  { name: "Shopify", desc: "Send order updates and manage customers on WhatsApp.", icon: "https://upload.wikimedia.org/wikipedia/commons/0/0e/Shopify_logo_2018.svg", category: "E-commerce" },
-  { name: "WooCommerce", desc: "Notify customers and sync orders from your store.", icon: "https://upload.wikimedia.org/wikipedia/commons/2/2a/WooCommerce_logo.svg", category: "E-commerce" },
-  { name: "Zoho CRM", desc: "Sync leads and automate follow-ups with Zoho CRM.", icon: "https://upload.wikimedia.org/wikipedia/commons/9/9c/Zoho_logo.svg", category: "CRM" },
-  { name: "Zendesk", desc: "Create tickets and manage support from WhatsApp.", icon: "https://upload.wikimedia.org/wikipedia/commons/c/c8/Zendesk_logo.svg", category: "Support" },
+const otherIntegrations: { name: string; desc: string; icon: string; category: string; href: string | null }[] = [
+  { name: "Slack", desc: "Get real-time notifications and stay updated in your channels.", icon: "https://upload.wikimedia.org/wikipedia/commons/d/d5/Slack_icon_2019.svg", category: "Productivity", href: null },
+  { name: "Google Sheets", desc: "Sync contacts, leads and data automatically.", icon: "https://upload.wikimedia.org/wikipedia/commons/3/30/Google_Sheets_logo_%282014-2020%29.svg", category: "Productivity", href: "/dashboard/integrations/google-sheets" },
+  { name: "HubSpot", desc: "Sync contacts and automate customer conversations.", icon: "https://www.hubspot.com/hubfs/HubSpot_Logos/HubSpot-Inversed-Favicon.png", category: "CRM", href: null },
+  { name: "Pipedrive", desc: "Manage leads and deals from WhatsApp conversations.", icon: "https://cdn.worldvectorlogo.com/logos/pipedrive.svg", category: "CRM", href: null },
+  { name: "Shopify", desc: "Send order updates and manage customers on WhatsApp.", icon: "https://upload.wikimedia.org/wikipedia/commons/0/0e/Shopify_logo_2018.svg", category: "E-commerce", href: null },
+  { name: "WooCommerce", desc: "Notify customers and sync orders from your store.", icon: "https://upload.wikimedia.org/wikipedia/commons/2/2a/WooCommerce_logo.svg", category: "E-commerce", href: null },
+  { name: "Zoho CRM", desc: "Sync leads and automate follow-ups with Zoho CRM.", icon: "https://upload.wikimedia.org/wikipedia/commons/9/9c/Zoho_logo.svg", category: "CRM", href: null },
+  { name: "Zendesk", desc: "Create tickets and manage support from WhatsApp.", icon: "https://upload.wikimedia.org/wikipedia/commons/c/c8/Zendesk_logo.svg", category: "Support", href: null },
 ];
 
 function IntegrationIcon({ src, name, fallbackIcon: FallbackIcon }: { src: string; name: string; fallbackIcon?: React.ElementType }) {
@@ -287,9 +287,15 @@ export default function IntegrationsPage() {
                   <p className="text-xs text-gray-500 leading-snug">{item.desc}</p>
                 </div>
               </div>
-              <span className="shrink-0 rounded-md bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700">
-                Coming Soon
-              </span>
+              {item.href ? (
+                <Link href={item.href} className="shrink-0 rounded-md bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700">
+                  Connect
+                </Link>
+              ) : (
+                <span className="shrink-0 rounded-md bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700">
+                  Coming Soon
+                </span>
+              )}
             </div>
           ))}
         </div>

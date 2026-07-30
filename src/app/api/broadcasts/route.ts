@@ -13,9 +13,21 @@ export async function GET(req: NextRequest) {
   const broadcasts = await prisma.broadcast.findMany({
     where: { workspaceId },
     orderBy: { createdAt: "desc" },
+    include: { logs: { select: { status: true } } },
   });
 
-  return NextResponse.json(broadcasts);
+  const payload = broadcasts.map((broadcast) => {
+    const readCount = broadcast.logs.filter((log) => log.status === "read").length;
+    const repliedCount = broadcast.logs.filter((log) => log.status === "replied").length;
+    return {
+      ...broadcast,
+      readCount,
+      repliedCount,
+      logs: undefined,
+    };
+  });
+
+  return NextResponse.json(payload);
 }
 
 // POST /api/broadcasts
@@ -26,9 +38,14 @@ export async function POST(req: NextRequest) {
   const workspaceId = await getWorkspaceId(user.id);
   if (!workspaceId) return NextResponse.json({ error: "No workspace" }, { status: 404 });
 
-  const { campaignName, templateName, audience, contactIds, headerUrl, bodyVariables } = await req.json();
+  const { campaignName, templateName, audience, contactIds, headerUrl, bodyVariables, scheduledAt } = await req.json();
   if (!campaignName || !templateName) {
     return NextResponse.json({ error: "campaignName and templateName are required" }, { status: 400 });
+  }
+
+  const futureSchedule = scheduledAt ? new Date(scheduledAt) : null;
+  if (scheduledAt && (!futureSchedule || isNaN(futureSchedule.getTime()))) {
+    return NextResponse.json({ error: "Invalid scheduledAt date" }, { status: 400 });
   }
 
   // Get WhatsApp account
@@ -49,17 +66,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No contacts found" }, { status: 400 });
   }
 
-  // Create broadcast record
   const broadcast = await prisma.broadcast.create({
     data: {
       workspaceId,
       campaignName,
       templateName,
       audience: audience ?? "all",
-      status: "sending",
+      status: scheduledAt ? "scheduled" : "sending",
       totalCount: contacts.length,
+      scheduledAt: scheduledAt ? futureSchedule : undefined,
     },
   });
+
+  if (scheduledAt) {
+    // Store contact IDs as metadata so the cron job knows who to send to
+    await prisma.broadcastLog.createMany({
+      data: contacts.map((c) => ({
+        broadcastId: broadcast.id,
+        contactId: c.id,
+        phone: c.phone,
+        status: "queued",
+      })),
+    });
+    return NextResponse.json({ broadcast, status: "scheduled", message: "Broadcast scheduled" }, { status: 201 });
+  }
 
   // Fetch template from DB to get correct language and header info
   const templateRecord = await prisma.template.findFirst({
@@ -99,7 +129,8 @@ export async function POST(req: NextRequest) {
             const components: Array<{ type: string; parameters?: Array<{ type: string; text?: string; image?: { link: string } }> }> = [];
 
             if (templateRecord?.headerType === "IMAGE") {
-              const mediaLink = headerUrl || templateRecord.header;
+              const isCloudinary = (u?: string | null) => !!u && u.includes("cloudinary.com");
+              const mediaLink = isCloudinary(templateRecord.header) ? templateRecord.header : (headerUrl || templateRecord.header);
               if (!mediaLink) throw new Error("No header URL for image template");
               components.push({ type: "header", parameters: [{ type: "image", image: { link: mediaLink } }] });
             }

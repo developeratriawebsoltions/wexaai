@@ -5,6 +5,8 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       { protocol: "https", hostname: "**.whatsapp.net" },
       { protocol: "https", hostname: "**.fbcdn.net" },
+      { protocol: "https", hostname: "scontent.whatsapp.net" },
+      { protocol: "https", hostname: "res.cloudinary.com" },
     ],
   },
 };

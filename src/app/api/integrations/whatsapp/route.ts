@@ -57,9 +57,10 @@ export async function POST(req: NextRequest) {
     tokenToUse = existing.accessToken;
   }
 
-  // Verify credentials against Meta Graph API
+  // Verify credentials against Meta Graph API using the supported Bearer auth header
   const metaRes = await fetch(
-    `https://graph.facebook.com/v21.0/${phoneNumberId}?fields=display_phone_number,verified_name&access_token=${tokenToUse}`
+    `https://graph.facebook.com/v21.0/${phoneNumberId}?fields=display_phone_number,verified_name`,
+    { headers: { Authorization: `Bearer ${tokenToUse}` } }
   );
   const metaData = await metaRes.json();
 

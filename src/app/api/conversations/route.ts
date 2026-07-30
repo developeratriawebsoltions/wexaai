@@ -23,8 +23,8 @@ export async function GET(req: NextRequest) {
     ...(search ? {
       OR: [
         { contactPhone: { contains: search } },
-        { contactName: { contains: search, mode: "insensitive" as const } },
-        { lastMessage: { contains: search, mode: "insensitive" as const } },
+        { contactName: { contains: search } },
+        { lastMessage: { contains: search } },
       ],
     } : {}),
   };

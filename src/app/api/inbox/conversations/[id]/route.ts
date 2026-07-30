@@ -7,30 +7,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const user = getUser(req);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const workspaceId = await getWorkspaceId(user.id);
+  const [workspaceId, { id }] = await Promise.all([getWorkspaceId(user.id), params]);
   if (!workspaceId) return NextResponse.json({ error: "No workspace" }, { status: 404 });
 
-  const { id } = await params;
-
-  const conversation = await prisma.conversation.findFirst({
-    where: { id, workspaceId },
-  });
-  if (!conversation) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-  // cursor = last message id from previous page (for older messages)
   const { searchParams } = new URL(req.url);
-  const cursor = searchParams.get("cursor"); // message id
+  const cursor = searchParams.get("cursor");
   const limit = 50;
 
-  // Reset unread only on first page load
-  if (!cursor) {
-    await prisma.conversation.update({
-      where: { id },
-      data: { unreadCount: 0 },
-    });
-  }
-
-  const messages = await prisma.message.findMany({
+  const conversationPromise = prisma.conversation.findFirst({ where: { id, workspaceId } });
+  const messagesPromise = prisma.message.findMany({
     where: { conversationId: id },
     orderBy: { createdAt: "desc" },
     take: limit,
@@ -48,12 +33,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     },
   });
 
+  const [conversation, messages] = await Promise.all([conversationPromise, messagesPromise]);
+  if (!conversation) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  // Reset unread in background (fire-and-forget) — don't block the response
+  if (!cursor && conversation.unreadCount > 0) {
+    prisma.conversation.update({ where: { id }, data: { unreadCount: 0 } }).catch(() => {});
+  }
+
   const reversed = messages.reverse();
-  // nextCursor = oldest message id in this page (for loading even older messages)
   const nextCursor = messages.length === limit ? reversed[0].id : null;
 
   return NextResponse.json({
-    conversation: cursor ? undefined : conversation, // only send on first load
+    conversation: cursor ? undefined : conversation,
     messages: reversed,
     nextCursor,
     hasMore: messages.length === limit,

@@ -24,8 +24,8 @@ export async function GET(req: NextRequest) {
         ? {
             OR: [
               { contactPhone: { contains: search } },
-              { contactName: { contains: search, mode: "insensitive" } },
-              { lastMessage: { contains: search, mode: "insensitive" } },
+              { contactName: { contains: search } },
+              { lastMessage: { contains: search } },
             ],
           }
         : {}),

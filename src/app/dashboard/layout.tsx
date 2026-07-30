@@ -7,6 +7,7 @@ import {
   Inbox, Home, Users, Radio, FileText, Bot,
   GitBranch, UsersRound, BarChart2, Plug, Settings,
   CreditCard, HelpCircle, LogOut, User, ChevronDown, Menu, X, Kanban, CalendarDays,
+  Plus, Library,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -18,7 +19,11 @@ const navItems = [
   { href: "/dashboard/crm",          label: "CRM",         icon: Kanban,       roles: ["owner","manager"] },
   { href: "/dashboard/bookings",     label: "Bookings",    icon: CalendarDays, roles: ["owner","manager","agent"] },
   { href: "/dashboard/broadcasts",   label: "Broadcasts",  icon: Radio,      roles: ["owner","manager"] },
-  { href: "/dashboard/templates",    label: "Templates",   icon: FileText,   roles: ["owner","manager"] },
+  { href: "/dashboard/templates",    label: "Templates",   icon: FileText,   roles: ["owner","manager"], dropdown: [
+    { href: "/dashboard/templates?new=1", label: "Create a Template", icon: Plus },
+    { href: "/dashboard/templates/library", label: "Template Library", icon: Library },
+  ]},
+  // placeholder removed — templates now has dropdown
   { href: "/dashboard/ai-agent",     label: "AI Agent",    icon: Bot,        roles: ["owner","manager"] },
   { href: "/dashboard/flows",        label: "Flows",       icon: GitBranch,  roles: ["owner","manager"] },
   { href: "/dashboard/team",         label: "Team",        icon: UsersRound, roles: ["owner","manager"] },
@@ -34,6 +39,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const role = workspace?.role ?? "agent";
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+
+  useEffect(() => {
+    if (pathname.startsWith("/dashboard/templates")) setTemplatesOpen(true);
+  }, [pathname]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [usage, setUsage] = useState<{ messages: number; plan: { messagesLimit: number; name: string } | null } | null>(null);
 
@@ -89,10 +99,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       )}
 
       {/* Sidebar */}
-      <aside className={`fixed md:static h-screen md:h-full w-64 md:w-72 flex-shrink-0 flex-col justify-between border-r border-[#e5e7eb] bg-white py-4 md:py-5 z-30 transition-transform duration-300 overflow-hidden ${
+      <aside className={`fixed md:static h-screen md:h-full w-64 md:w-64 flex-shrink-0 flex flex-col justify-between border-r border-[#e5e7eb] bg-white py-4 md:py-5 z-30 transition-transform duration-300 ${
         sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
       }`}>
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto min-h-0">
           {/* Logo + Workspace - Hidden on Mobile (shown in header) */}
           <div className="mb-6 px-4 hidden md:block">
             <div className="flex items-center gap-2.5">
@@ -112,8 +122,50 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="mb-4 md:hidden" />
 
           <nav className="space-y-0.5 px-2 md:px-2">
-            {navItems.filter(item => item.roles.includes(role)).map(({ href, label, icon: Icon }) => {
-              const active = pathname === href;
+            {navItems.filter(item => item.roles.includes(role)).map(({ href, label, icon: Icon, dropdown }) => {
+              const active = pathname === href || pathname.startsWith(href + "/");
+              if (dropdown) {
+                const isDropActive = pathname.startsWith("/dashboard/templates");
+                return (
+                  <div key={href}>
+                    <button
+                      onClick={() => setTemplatesOpen(o => !o)}
+                      className={`flex w-full items-center gap-3 rounded-lg px-2 md:px-3 py-2 md:py-2.5 text-sm md:text-base font-bold transition-colors ${
+                        isDropActive ? "bg-green-600 text-white" : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                      }`}
+                    >
+                      <Icon size={16} className="md:w-[17px] md:h-[17px] flex-shrink-0" />
+                      <span className="flex-1 truncate text-left">{label}</span>
+                      <ChevronDown size={13} className={`flex-shrink-0 transition-transform ${templatesOpen ? "rotate-180" : ""}`} />
+                    </button>
+                    {templatesOpen && (
+                      <div className="ml-4 mt-0.5 space-y-0.5">
+                        {dropdown.map(({ href: subHref, label: subLabel, icon: SubIcon }) => (
+                          <Link
+                            key={subHref}
+                            href={subHref}
+                            onClick={() => setSidebarOpen(false)}
+                      className={`flex items-center gap-2.5 rounded-lg px-2 md:px-3 py-1.5 md:py-2 text-xs md:text-sm font-semibold transition-colors ${
+                              (subHref === "/dashboard/templates/library" && pathname === "/dashboard/templates/library") ||
+                              (subHref === "/dashboard/templates?new=1") ? "" :
+                              pathname === "/dashboard/templates" && subHref === "/dashboard/templates"
+                                ? "bg-green-50 text-green-700"
+                                : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                            } ${
+                              pathname === subHref || (subHref === "/dashboard/templates/library" && pathname === "/dashboard/templates/library")
+                                ? "bg-green-50 text-green-700"
+                                : ""
+                            }`}
+                          >
+                            <SubIcon size={13} className="flex-shrink-0" />
+                            <span className="truncate">{subLabel}</span>
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
               return (
                 <Link
                   key={href}
@@ -242,7 +294,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* Main */}
-      <main className="flex flex-1 flex-col overflow-y-auto mt-16 md:mt-0">{children}</main>
+      <main className="flex flex-1 min-w-0 flex-col overflow-y-auto mt-16 md:mt-0">{children}</main>
     </div>
   );
 }

@@ -31,19 +31,42 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   console.log("[Template Send] template.headerType:", template.headerType);
   console.log("[Template Send] template.header:", template.header);
 
+  function parseLocationHeader(value?: string | null) {
+    if (!value) return null;
+    try {
+      const parsed = JSON.parse(value);
+      if (!parsed.latitude || !parsed.longitude) return null;
+      return {
+        latitude: String(parsed.latitude),
+        longitude: String(parsed.longitude),
+        name: parsed.name ? String(parsed.name) : undefined,
+        address: parsed.address ? String(parsed.address) : undefined,
+      };
+    } catch {
+      return null;
+    }
+  }
+
   // Build components with variable substitution
-  type MetaParam = { type: string; text?: string; image?: { link: string }; video?: { link: string }; document?: { link: string } };
+  type MetaParam = { type: string; text?: string; image?: { link: string }; video?: { link: string }; document?: { link: string }; location?: { latitude: string; longitude: string; name?: string; address?: string } };
   const components: { type: string; parameters?: MetaParam[] }[] = [];
 
   if (template.headerType) {
     const isMedia = ["IMAGE", "VIDEO", "DOCUMENT"].includes(template.headerType);
     if (isMedia) {
       const mediaLink = headerUrl || template.header;
-      if (!mediaLink) return NextResponse.json({ error: `Please provide an image URL to send this template.` }, { status: 400 });
+      if (!mediaLink) return NextResponse.json({ error: `Please provide a ${template.headerType.toLowerCase()} URL to send this template.` }, { status: 400 });
       const mediaKey = template.headerType.toLowerCase() as "image" | "video" | "document";
       components.push({
         type: "header",
         parameters: [{ type: mediaKey, [mediaKey]: { link: mediaLink } } as MetaParam],
+      });
+    } else if (template.headerType === "LOCATION") {
+      const locationPayload = parseLocationHeader(headerUrl || template.header);
+      if (!locationPayload) return NextResponse.json({ error: "Please provide valid location details to send this template." }, { status: 400 });
+      components.push({
+        type: "header",
+        parameters: [{ type: "location", location: locationPayload }],
       });
     }
   }
