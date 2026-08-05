@@ -810,7 +810,7 @@ export default function InboxPage() {
                             />
                           )}
                           <div className="px-3 pt-2 pb-1">
-                            <p className="text-sm font-semibold leading-relaxed whitespace-pre-wrap pr-10">{msg.text}</p>
+                            <p className="text-sm font-semibold leading-relaxed whitespace-pre-wrap break-all pr-10">{msg.text}</p>
                             <div className="flex justify-end items-center gap-1 mt-1">
                               <span className="text-[10px] text-gray-500">{formatTime(msg.createdAt)}</span>
                               {msg.direction === "outbound" && <StatusIcon status={msg.status} />}
@@ -890,7 +890,7 @@ export default function InboxPage() {
                           </>
                         ) : (
                           <>
-                            <p className="text-sm sm:text-base font-semibold leading-relaxed pr-12 sm:pr-14 whitespace-pre-wrap">{msg.text}</p>
+                            <p className="text-sm sm:text-base font-semibold leading-relaxed pr-12 sm:pr-14 whitespace-pre-wrap break-all">{msg.text}</p>
                             <div className="absolute bottom-1 sm:bottom-1.5 right-2 sm:right-2.5 flex items-center gap-0.5 sm:gap-1">
                               <span className="text-[8px] sm:text-[10px] text-gray-500">{formatTime(msg.createdAt)}</span>
                               {msg.direction === "outbound" && <StatusIcon status={msg.status} />}

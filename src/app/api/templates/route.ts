@@ -304,7 +304,7 @@ export async function POST(req: NextRequest) {
       headerHandle: components.find((c: any) => c.type === "HEADER")?.example?.header_handle?.[0] ?? null,
       body,
       footer: footer ?? null,
-      buttons: buttons ? buttons as Prisma.InputJsonValue : Prisma.JsonNull,
+      buttons: buttons ? buttons as Prisma.InputJsonValue : Prisma.DbNull,
       status: metaData.status ?? "PENDING",
     },
   });

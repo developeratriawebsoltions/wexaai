@@ -277,6 +277,8 @@ async function processWebhook(body: unknown) {
       phone: contactPhone,
       message: text,
       buttonPayload: effectiveButtonPayload,
+      conversationId: conversation.id,
+      contactId: contact.id,
     }).catch((err) => {
       console.error("[Webhook] runFlow error:", err);
       return { matched: false };
@@ -284,70 +286,90 @@ async function processWebhook(body: unknown) {
 
     console.log("[Webhook] flowMatched:", flowMatched);
 
-    if (!flowMatched && isText) {
-      // 1. Booking scheduler (highest priority for text messages)
-      const { handled: bookHandled, reply: bookReply } = await handleBookingScheduler(
-        workspaceId, contactPhone, conversation.id, text
-      ).catch((err) => {
-        console.error("[Webhook] booking scheduler error:", err);
-        return { handled: false, reply: undefined } as { handled: boolean; reply?: string };
-      });
-
-      if (bookHandled && bookReply) {
-        const waAccount = await prisma.whatsAppAccount.findUnique({ where: { workspaceId } });
-        if (waAccount) {
-          const metaRes = await fetch(
-            `https://graph.facebook.com/v21.0/${waAccount.phoneNumberId}/messages`,
-            {
-              method: "POST",
-              headers: { Authorization: `Bearer ${waAccount.accessToken}`, "Content-Type": "application/json" },
-              body: JSON.stringify({ messaging_product: "whatsapp", to: contactPhone.replace(/^\+/, ""), type: "text", text: { body: bookReply } }),
-            }
-          );
-          const metaData = await metaRes.json();
-          await prisma.message.create({
-            data: { workspaceId, conversationId: conversation.id, contactId: contact.id, from: "AI", text: bookReply, waMessageId: metaData?.messages?.[0]?.id, direction: "outbound", status: metaRes.ok ? "sent" : "failed", messageType: "text" },
-          });
-          await prisma.conversation.update({ where: { id: conversation.id }, data: { lastMessage: bookReply, lastMessageAt: new Date() } });
+    // Only handle text/button messages with automation
+    if (!flowMatched) {
+      if (isText) {
+        // 1. Booking scheduler
+        let bookHandled = false;
+        let bookReply: string | undefined;
+        try {
+          const result = await handleBookingScheduler(workspaceId, contactPhone, conversation.id, text);
+          bookHandled = result.handled;
+          bookReply = result.reply;
+        } catch (err) {
+          console.error("[Webhook] booking scheduler error:", err);
         }
-      // 2. Lead qualification
-      } else {
-        const { handled: qualHandled, reply: qualReply } = await handleLeadQualification(
-          workspaceId, contactPhone, conversation.id, text
-        ).catch((err) => {
-          console.error("[Webhook] lead qualification error:", err);
-          return { handled: false, reply: undefined } as { handled: boolean; reply?: string };
-        });
 
-        if (qualHandled && qualReply) {
-          const waAccount = await prisma.whatsAppAccount.findUnique({ where: { workspaceId } });
-          if (waAccount) {
-            const metaRes = await fetch(
-              `https://graph.facebook.com/v21.0/${waAccount.phoneNumberId}/messages`,
-              {
-                method: "POST",
-                headers: { Authorization: `Bearer ${waAccount.accessToken}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ messaging_product: "whatsapp", to: contactPhone.replace(/^\+/, ""), type: "text", text: { body: qualReply } }),
-              }
-            );
-            const metaData = await metaRes.json();
-            await prisma.message.create({
-              data: { workspaceId, conversationId: conversation.id, contactId: contact.id, from: "AI", text: qualReply, waMessageId: metaData?.messages?.[0]?.id, direction: "outbound", status: metaRes.ok ? "sent" : "failed", messageType: "text" },
-            });
-            await prisma.conversation.update({ where: { id: conversation.id }, data: { lastMessage: qualReply, lastMessageAt: new Date() } });
-          }
-        // 3. AI engine fallback
+        if (bookHandled && bookReply) {
+          await sendOutboundMessage(workspaceId, conversation.id, contact.id, contactPhone, bookReply);
         } else {
-          await runAiEngine(workspaceId, conversation.id, contactPhone, text).catch((err) => {
-            console.error("[Webhook] AI engine failed:", err);
-          });
+          // 2. Lead qualification
+          let qualHandled = false;
+          let qualReply: string | undefined;
+          try {
+            const result = await handleLeadQualification(workspaceId, contactPhone, conversation.id, text);
+            qualHandled = result.handled;
+            qualReply = result.reply;
+          } catch (err) {
+            console.error("[Webhook] lead qualification error:", err);
+          }
+
+          if (qualHandled && qualReply) {
+            await sendOutboundMessage(workspaceId, conversation.id, contact.id, contactPhone, qualReply);
+          } else {
+            // 3. AI engine fallback
+            await runAiEngine(workspaceId, conversation.id, contactPhone, text).catch((err) => {
+              console.error("[Webhook] AI engine failed:", err);
+            });
+          }
         }
+      } else {
+        // Non-text (button/media) with no flow match — try AI
+        await runAiEngine(workspaceId, conversation.id, contactPhone, text).catch((err) => {
+          console.error("[Webhook] AI engine failed:", err);
+        });
       }
-    } else if (!flowMatched) {
-      await runAiEngine(workspaceId, conversation.id, contactPhone, text).catch((err) => {
-        console.error("[Webhook] AI engine failed:", err);
-      });
     }
   }
+}
 
+async function sendOutboundMessage(
+  workspaceId: string,
+  conversationId: string,
+  contactId: string,
+  contactPhone: string,
+  text: string
+) {
+  try {
+    const waAccount = await prisma.whatsAppAccount.findUnique({ where: { workspaceId } });
+    if (!waAccount) return;
+    const metaRes = await fetch(
+      `https://graph.facebook.com/v21.0/${waAccount.phoneNumberId}/messages`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${waAccount.accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ messaging_product: "whatsapp", to: contactPhone.replace(/^\+/, ""), type: "text", text: { body: text } }),
+      }
+    );
+    const metaData = await metaRes.json().catch(() => ({}));
+    await prisma.message.create({
+      data: {
+        workspaceId,
+        conversationId,
+        contactId,
+        from: "AI",
+        text,
+        waMessageId: (metaData as any)?.messages?.[0]?.id,
+        direction: "outbound",
+        status: metaRes.ok ? "sent" : "failed",
+        messageType: "text",
+      },
+    });
+    await prisma.conversation.update({
+      where: { id: conversationId },
+      data: { lastMessage: text, lastMessageAt: new Date() },
+    });
+  } catch (err) {
+    console.error("[Webhook] sendOutboundMessage error:", err);
+  }
 }

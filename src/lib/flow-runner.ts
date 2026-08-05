@@ -26,17 +26,43 @@ function normalizeToPhone(phone: string) {
   return phone.replace(/^\+/, "");
 }
 
-async function sendTextMessage(phoneNumberId: string, accessToken: string, to: string, text: string) {
+async function sendTextMessage(
+  phoneNumberId: string,
+  accessToken: string,
+  to: string,
+  text: string,
+  saveCtx?: { workspaceId: string; conversationId: string; contactId: string }
+) {
   const res = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify({ messaging_product: "whatsapp", to: normalizeToPhone(to), type: "text", text: { body: text, preview_url: false } }),
   });
+  const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    console.error("[Flow] sendTextMessage failed:", JSON.stringify(err));
+    console.error("[Flow] sendTextMessage failed:", JSON.stringify(data));
   } else {
     console.log("[Flow] sendTextMessage success to:", to);
+    if (saveCtx) {
+      const waMessageId = (data as any)?.messages?.[0]?.id;
+      await prisma.message.create({
+        data: {
+          workspaceId: saveCtx.workspaceId,
+          conversationId: saveCtx.conversationId,
+          contactId: saveCtx.contactId,
+          from: phoneNumberId,
+          text,
+          waMessageId,
+          direction: "outbound",
+          status: "sent",
+          messageType: "text",
+        },
+      }).catch((e) => console.error("[Flow] save message failed:", e));
+      await prisma.conversation.update({
+        where: { id: saveCtx.conversationId },
+        data: { lastMessage: text, lastMessageAt: new Date() },
+      }).catch(() => {});
+    }
   }
   return res.ok;
 }
@@ -48,7 +74,8 @@ async function sendTemplateMessage(
   to: string,
   templateName: string,
   language: string,
-  headerImageUrl?: string
+  headerImageUrl?: string,
+  saveCtx?: { conversationId: string; contactId: string }
 ) {
   const template = await prisma.template.findUnique({
     where: { workspaceId_name_language: { workspaceId, name: templateName, language } },
@@ -89,11 +116,34 @@ async function sendTemplateMessage(
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify(metaPayload),
   });
+  const resData = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    console.error("[Flow] sendTemplateMessage failed:", JSON.stringify(err));
+    console.error("[Flow] sendTemplateMessage failed:", JSON.stringify(resData));
   } else {
     console.log("[Flow] sendTemplateMessage success:", templateName);
+    if (saveCtx) {
+      const waMessageId = (resData as any)?.messages?.[0]?.id;
+      const bodyText = template?.body ?? templateName;
+      await prisma.message.create({
+        data: {
+          workspaceId,
+          conversationId: saveCtx.conversationId,
+          contactId: saveCtx.contactId,
+          from: phoneNumberId,
+          text: bodyText,
+          waMessageId,
+          direction: "outbound",
+          status: "sent",
+          messageType: "template",
+          mediaUrl: headerImageUrl || null,
+          metadata: template?.buttons ?? null,
+        },
+      }).catch((e) => console.error("[Flow] save template message failed:", e));
+      await prisma.conversation.update({
+        where: { id: saveCtx.conversationId },
+        data: { lastMessage: bodyText, lastMessageAt: new Date() },
+      }).catch(() => {});
+    }
   }
   return res.ok;
 }
@@ -111,8 +161,11 @@ export async function runFlow(params: {
   phone: string;
   message: string;
   buttonPayload?: string;
+  conversationId?: string;
+  contactId?: string;
 }): Promise<{ matched: boolean; flowId?: string; flowName?: string }> {
-  const { workspaceId, phone, message, buttonPayload = "" } = params;
+  const { workspaceId, phone, message, buttonPayload = "", conversationId, contactId } = params;
+  const saveCtx = conversationId && contactId ? { workspaceId, conversationId, contactId } : undefined;
 
   const [flows, waAccount] = await Promise.all([
     prisma.flow.findMany({
@@ -238,7 +291,7 @@ export async function runFlow(params: {
         const typingDelay = Number(nodeCfg.typingDelay) || 0;
         if (text) {
           if (typingDelay > 0) await sleep(typingDelay * 1000);
-          await sendTextMessage(phoneNumberId, accessToken, phone, text);
+          await sendTextMessage(phoneNumberId, accessToken, phone, text, saveCtx);
         }
       }
 
@@ -259,7 +312,7 @@ export async function runFlow(params: {
           const typingDelay      = Number(nodeCfg.typingDelay) || 0;
           if (templateName) {
             if (typingDelay > 0) await sleep(typingDelay * 1000);
-            await sendTemplateMessage(workspaceId, phoneNumberId, accessToken, phone, templateName, templateLanguage, headerImageUrl || undefined);
+            await sendTemplateMessage(workspaceId, phoneNumberId, accessToken, phone, templateName, templateLanguage, headerImageUrl || undefined, saveCtx);
           }
         }
       }

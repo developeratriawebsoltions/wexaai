@@ -299,6 +299,7 @@ model BroadcastLog {
   phone       String
   status      String    @default("pending")
   messageId   String?
+  errorReason String?
   createdAt   DateTime  @default(now())
   broadcast   Broadcast @relation(fields: [broadcastId], references: [id])
 }
@@ -310,10 +311,10 @@ model Template {
   name           String
   category       String
   language       String    @default("en")
-  header         String?
+  header         String?   @db.Text
   headerType     String?
-  body           String
-  footer         String?
+  body           String    @db.Text
+  footer         String?   @db.Text
   buttons        Json?
   status         String    @default("PENDING")
   rejectedReason String?

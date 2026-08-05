@@ -149,7 +149,7 @@ export async function runAiEngine(
       console.error("[AI Engine] Empty final response");
       await prisma.conversation.update({
         where: { id: conversationId },
-        data: { status: "needs_attention" },
+        data: { status: "pending" },
       });
       return;
     }
@@ -158,6 +158,7 @@ export async function runAiEngine(
     const account = await prisma.whatsAppAccount.findUnique({ where: { workspaceId } });
     if (!account) return;
 
+    const toPhone = phone.replace(/^\+/, "");
     const metaRes = await fetch(
       `https://graph.facebook.com/v21.0/${account.phoneNumberId}/messages`,
       {
@@ -168,7 +169,7 @@ export async function runAiEngine(
         },
         body: JSON.stringify({
           messaging_product: "whatsapp",
-          to: phone.replace(/^\+/, ""),
+          to: toPhone,
           type: "text",
           text: { body: aiText },
         }),
@@ -176,7 +177,7 @@ export async function runAiEngine(
     );
 
     const metaData = await metaRes.json();
-    console.log("[AI Engine] WhatsApp send:", metaRes.status);
+    console.log("[AI Engine] WhatsApp send:", metaRes.status, JSON.stringify(metaData));
 
     // 6. Save AI message to DB
     const conversation = await prisma.conversation.findUnique({

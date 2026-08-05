@@ -55,13 +55,37 @@ export async function POST(req: NextRequest) {
   const wa = await prisma.whatsAppAccount.findUnique({
     where: { workspaceId: membership.workspaceId },
   });
-  const normalizedStatus = (wa?.status ?? "").toLowerCase();
-  if (!wa || !["active", "connected", "verified"].includes(normalizedStatus)) {
-    return NextResponse.json({ error: "WhatsApp not connected" }, { status: 400 });
+
+  // Log what we found to help diagnose issues
+  console.log("[Sync] WhatsApp account:", wa ? {
+    status: wa.status,
+    hasWabaId: !!wa.wabaId,
+    hasAccessToken: !!wa.accessToken,
+    wabaId: wa.wabaId,
+  } : "NOT FOUND");
+
+  if (!wa) {
+    return NextResponse.json({ error: "WhatsApp not connected. Please connect WhatsApp in Settings first." }, { status: 400 });
   }
 
-  if (!wa.wabaId || !wa.accessToken) {
-    return NextResponse.json({ error: "WhatsApp account is missing WABA ID or access token. Please reconnect in Settings." }, { status: 400 });
+  // Status check — treat any non-disconnected status as valid (consistent with how connect saves "active")
+  const normalizedStatus = (wa.status ?? "").toLowerCase().trim();
+  if (normalizedStatus === "disconnected") {
+    return NextResponse.json({ error: "WhatsApp is disconnected. Please reconnect in Settings." }, { status: 400 });
+  }
+
+  if (!wa.wabaId) {
+    return NextResponse.json({
+      error: "WhatsApp account is missing WABA ID. Please reconnect in Settings and ensure you enter the WABA (WhatsApp Business Account) ID.",
+      field: "wabaId",
+    }, { status: 400 });
+  }
+
+  if (!wa.accessToken) {
+    return NextResponse.json({
+      error: "WhatsApp account is missing the Access Token. Please reconnect in Settings and enter your Meta access token.",
+      field: "accessToken",
+    }, { status: 400 });
   }
 
   // Fetch all templates from Meta — paginate if needed
@@ -106,15 +130,16 @@ export async function POST(req: NextRequest) {
     const footerComp = extractComponent(components, "FOOTER");
     const buttonsComp = extractComponent(components, "BUTTONS");
 
-    const buttons: Prisma.InputJsonValue | typeof Prisma.JsonNull = buttonsComp?.buttons?.map((b) => ({
-      type: b.type,
-      text: b.text,
-      url: b.url,
-      phone_number: b.phone_number,
-      example: b.example,
-      flow_id: b.flow_id,
-      flow_name: b.flow_name,
-    })) ?? Prisma.JsonNull;
+    const buttons: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput =
+      buttonsComp?.buttons?.map((b) => ({
+        type: b.type,
+        text: b.text,
+        url: b.url,
+        phone_number: b.phone_number,
+        example: b.example,
+        flow_id: b.flow_id,
+        flow_name: b.flow_name,
+      })) ?? Prisma.DbNull;
 
     const headerUrl = headerComp?.format === "TEXT"
       ? (headerComp?.text ?? null)

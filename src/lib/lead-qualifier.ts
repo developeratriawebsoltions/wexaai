@@ -153,9 +153,9 @@ export async function handleLeadQualification(
     await prisma.conversation.update({
       where: { id: conversationId },
       data: {
-        status: score >= 8 ? "lead_qualified" : "open",
+        status: score >= 8 ? "resolved" : "open",
       },
-    });
+    }).catch(() => {});
 
     const closingMessage =
       score >= 8
@@ -255,8 +255,8 @@ export async function triggerManualQualification(
   if (conversation) {
     await prisma.conversation.update({
       where: { id: conversation.id },
-      data: { status: score >= 8 ? "lead_qualified" : "open" },
-    });
+      data: { status: score >= 8 ? "resolved" : "open" },
+    }).catch(() => {});
   }
 
   return {

@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     : { workspaceId };
 
   const contacts = await prisma.contact.findMany({
-    where: contactFilter,
+    where: { ...contactFilter, optedOut: false },
     select: { id: true, phone: true, name: true },
   });
 
@@ -114,75 +114,94 @@ export async function POST(req: NextRequest) {
     { status: 201 }
   );
 
-  // Background processing — chunked to avoid rate limits
+  // Background processing — fully sequential, 1 message per second (WATI-style)
   (async () => {
     let sentCount = 0;
     let failedCount = 0;
-    const CHUNK_SIZE = 10;
 
-    for (let i = 0; i < contacts.length; i += CHUNK_SIZE) {
-      const chunk = contacts.slice(i, i + CHUNK_SIZE);
+    for (let i = 0; i < contacts.length; i++) {
+      const contact = contacts[i];
+      try {
+        const components: Array<{ type: string; parameters?: Array<{ type: string; text?: string; image?: { link: string } }> }> = [];
 
-      await Promise.all(
-        chunk.map(async (contact) => {
-          try {
-            const components: Array<{ type: string; parameters?: Array<{ type: string; text?: string; image?: { link: string } }> }> = [];
+        if (templateRecord?.headerType === "IMAGE") {
+          const isCloudinary = (u?: string | null) => !!u && u.includes("cloudinary.com");
+          const mediaLink = isCloudinary(templateRecord.header) ? templateRecord.header : (headerUrl || templateRecord.header);
+          if (!mediaLink) throw new Error("No header URL for image template");
+          components.push({ type: "header", parameters: [{ type: "image", image: { link: mediaLink } }] });
+        }
 
-            if (templateRecord?.headerType === "IMAGE") {
-              const isCloudinary = (u?: string | null) => !!u && u.includes("cloudinary.com");
-              const mediaLink = isCloudinary(templateRecord.header) ? templateRecord.header : (headerUrl || templateRecord.header);
-              if (!mediaLink) throw new Error("No header URL for image template");
-              components.push({ type: "header", parameters: [{ type: "image", image: { link: mediaLink } }] });
+        if (bodyVarCount > 0 && bodyVariables && typeof bodyVariables === "object") {
+          const bodyParams = Array.from({ length: bodyVarCount }, (_, idx) => {
+            const key = String(idx + 1);
+            let value = (bodyVariables as Record<string, string>)[key]?.trim() || "";
+            if (value.toLowerCase() === "{{name}}" || value.toLowerCase() === "name") {
+              value = (contact as { name?: string }).name || contact.phone;
             }
+            return { type: "text", text: value || contact.phone };
+          });
+          components.push({ type: "body", parameters: bodyParams });
+        }
 
-            if (bodyVarCount > 0 && bodyVariables && typeof bodyVariables === "object") {
-              const bodyParams = Array.from({ length: bodyVarCount }, (_, idx) => {
-                const key = String(idx + 1);
-                let value = (bodyVariables as Record<string, string>)[key]?.trim() || "";
-                if (value.toLowerCase() === "{{name}}" || value.toLowerCase() === "name") {
-                  value = (contact as { name?: string }).name || contact.phone;
-                }
-                return { type: "text", text: value || contact.phone };
-              });
-              components.push({ type: "body", parameters: bodyParams });
-            }
+        const buildPayload = () => JSON.stringify({
+          messaging_product: "whatsapp",
+          to: contact.phone.replace(/^\+/, ""),
+          type: "template",
+          template: { name: templateName, language: { code: templateLanguage }, ...(components.length ? { components } : {}) },
+        });
 
-            const res = await fetch(`https://graph.facebook.com/v21.0/${wa.phoneNumberId}/messages`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json", Authorization: `Bearer ${wa.accessToken}` },
-              body: JSON.stringify({
-                messaging_product: "whatsapp",
-                to: contact.phone.replace(/^\+/, ""),
-                type: "template",
-                template: {
-                  name: templateName,
-                  language: { code: templateLanguage },
-                  ...(components.length ? { components } : {}),
-                },
-              }),
-            });
+        let res = await fetch(`https://graph.facebook.com/v21.0/${wa.phoneNumberId}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${wa.accessToken}` },
+          body: buildPayload(),
+        });
+        let data = await res.json();
 
-            const data = await res.json();
-            const messageId = data?.messages?.[0]?.id ?? null;
-            const status = res.ok && messageId ? "sent" : "failed";
-            if (status === "sent") sentCount++; else failedCount++;
+        // Rate limited — pause entire queue 60s then retry this contact
+        if (data?.error?.code === 130429 || data?.error?.code === 131056) {
+          console.warn(`[Broadcast] Rate limited at contact ${i + 1}/${contacts.length}, pausing 60s...`);
+          await new Promise((r) => setTimeout(r, 60000));
+          res = await fetch(`https://graph.facebook.com/v21.0/${wa.phoneNumberId}/messages`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${wa.accessToken}` },
+            body: buildPayload(),
+          });
+          data = await res.json();
+        }
 
-            await prisma.broadcastLog.create({
-              data: { broadcastId: broadcast.id, contactId: contact.id, phone: contact.phone, status, messageId },
-            });
-          } catch {
-            failedCount++;
-            await prisma.broadcastLog.create({
-              data: { broadcastId: broadcast.id, contactId: contact.id, phone: contact.phone, status: "failed" },
-            });
+        const messageId = data?.messages?.[0]?.id ?? null;
+        const metaError = data?.error
+          ? `[${data.error.code}] ${data.error.message}${data.error.error_data?.details ? " — " + data.error.error_data.details : ""}`
+          : null;
+        const status = res.ok && messageId ? "sent" : "failed";
+
+        if (status === "sent") sentCount++;
+        else {
+          failedCount++;
+          console.error(`[Broadcast] FAILED ${i + 1}/${contacts.length} phone=${contact.phone}`, metaError ?? `HTTP ${res.status}`);
+          // 131049 = Meta permanently blocked delivery for this contact — opt them out
+          if (data?.error?.code === 131049 || data?.error?.code === 131026) {
+            await prisma.contact.update({
+              where: { id: contact.id },
+              data: { optedOut: true },
+            }).catch(() => {});
+            console.log(`[Broadcast] Auto opted-out ${contact.phone} due to error ${data.error.code}`);
           }
-        })
-      );
+        }
 
-      // 300ms delay between chunks to respect Meta rate limits
-      if (i + CHUNK_SIZE < contacts.length) {
-        await new Promise((r) => setTimeout(r, 300));
+        await prisma.broadcastLog.create({
+          data: { broadcastId: broadcast.id, contactId: contact.id, phone: contact.phone, status, messageId, errorReason: metaError },
+        });
+      } catch (err) {
+        failedCount++;
+        console.error(`[Broadcast] EXCEPTION phone=${contact.phone}`, err);
+        await prisma.broadcastLog.create({
+          data: { broadcastId: broadcast.id, contactId: contact.id, phone: contact.phone, status: "failed", errorReason: String(err) },
+        });
       }
+
+      // 1 message per second — matches WATI pacing, avoids 131049
+      await new Promise((r) => setTimeout(r, 1000));
     }
 
     await prisma.broadcast.update({

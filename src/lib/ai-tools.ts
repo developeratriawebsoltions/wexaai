@@ -77,7 +77,7 @@ export async function qualifyLead(
   // Update conversation status
   await prisma.conversation.updateMany({
     where: { workspaceId, contactPhone: phone },
-    data: { status: score >= 7 ? "lead_qualified" : "open" },
+    data: { status: score >= 7 ? "open" : "open" },
   });
 
   return {
@@ -94,7 +94,7 @@ export async function assignHuman(
 ): Promise<ToolResult> {
   await prisma.conversation.updateMany({
     where: { workspaceId, contactPhone: phone },
-    data: { status: "needs_attention" },
+    data: { status: "pending" },
   });
 
   return {

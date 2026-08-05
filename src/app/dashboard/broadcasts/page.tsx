@@ -24,6 +24,7 @@ type BroadcastLog = {
   phone: string;
   status: string;
   messageId: string | null;
+  errorReason: string | null;
 };
 
 type Template = {
@@ -892,9 +893,40 @@ export default function BroadcastsPage() {
                 <h3 className="text-sm font-semibold text-gray-800">{detail?.campaignName ?? "Loading..."}</h3>
                 {detail && <p className="text-[11px] text-gray-400">{detail.templateName}</p>}
               </div>
-              <button onClick={() => setDetail(null)} className="text-gray-400 hover:text-gray-600">
-                <X size={16} />
-              </button>
+              <div className="flex items-center gap-2">
+                {detail && (
+                  <button
+                    onClick={() => {
+                      const lines = [
+                        `Broadcast: ${detail.campaignName}`,
+                        `Template: ${detail.templateName}`,
+                        `Date: ${new Date(detail.createdAt).toLocaleString()}`,
+                        `Total: ${detail.totalCount} | Sent: ${detail.sentCount} | Failed: ${detail.failedCount}`,
+                        ``,
+                        `${"-".repeat(60)}`,
+                        `Phone                Status       Error Reason`,
+                        `${"-".repeat(60)}`,
+                        ...detail.logs.map((log) =>
+                          `${log.phone.padEnd(20)} ${log.status.padEnd(12)} ${log.errorReason ?? "-"}`
+                        ),
+                      ];
+                      const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `${detail.campaignName.replace(/\s+/g, "_")}_logs.txt`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700"
+                  >
+                    Download .txt
+                  </button>
+                )}
+                <button onClick={() => setDetail(null)} className="text-gray-400 hover:text-gray-600">
+                  <X size={16} />
+                </button>
+              </div>
             </div>
 
             {detailLoading ? (
@@ -940,6 +972,7 @@ export default function BroadcastsPage() {
                         <th className="px-3 py-2 text-left font-medium">Phone</th>
                         <th className="px-3 py-2 text-left font-medium">Status</th>
                         <th className="px-3 py-2 text-left font-medium">Message ID</th>
+                        <th className="px-3 py-2 text-left font-medium">Error</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -948,13 +981,19 @@ export default function BroadcastsPage() {
                           <td className="px-3 py-2 text-gray-700">{log.phone}</td>
                           <td className="px-3 py-2">
                             <span className={`rounded-full px-2 py-0.5 font-semibold capitalize ${
-                              log.status === "sent" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"
+                              log.status === "sent" ? "bg-green-100 text-green-700" :
+                              log.status === "delivered" ? "bg-blue-100 text-blue-700" :
+                              log.status === "read" ? "bg-purple-100 text-purple-700" :
+                              "bg-red-100 text-red-600"
                             }`}>
                               {log.status}
                             </span>
                           </td>
                           <td className="px-3 py-2 text-gray-400 font-mono truncate max-w-[140px]">
                             {log.messageId ?? "—"}
+                          </td>
+                          <td className="px-3 py-2 text-red-400 truncate max-w-[160px]" title={log.errorReason ?? ""}>
+                            {log.errorReason ?? "—"}
                           </td>
                         </tr>
                       ))}
